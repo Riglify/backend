@@ -77,3 +77,9 @@ res.redirect(
 app.listen(3000,()=>{
     console.log("Server running");
 });
+
+localStorage.setItem("riglifyUser", JSON.stringify({
+    username,
+    avatar,
+    id
+}));
