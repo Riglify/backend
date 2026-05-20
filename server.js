@@ -60,12 +60,9 @@ app.get("/auth/discord/callback", async(req,res)=>{
         // TEMPORARY:
         // later save to Supabase
 
-        res.send(`
-            <h1>Logged in!</h1>
-            <p>This is temporary!!!!!!11111</p>
-            <a href="https://nbtofcl.short.gy/p/rgfy">Continue</a>
-            <pre>${JSON.stringify(user,null,2)}</pre>
-        `);
+res.redirect(
+`https://riglify.github.io/#?username=${encodeURIComponent(user.username)}&avatar=${user.avatar}&id=${user.id}`
+);
 
     }catch(err){
 
