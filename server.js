@@ -80,3 +80,77 @@ app.get("/auth/discord/callback", async(req,res)=>{
 app.listen(3000,()=>{
     console.log("Server running");
 });
+
+/* ROBLOX USER JSON */
+
+/* AVATAR FETCHER */
+
+app.get("/avatar/:username", async(req,res)=>{
+
+    try{
+
+        const username = req.params.username;
+
+        /* USER ID */
+
+        const userRes = await axios.post(
+            "https://users.roblox.com/v1/usernames/users",
+            {
+                usernames:[username],
+                excludeBannedUsers:false
+            }
+        );
+
+        if(!userRes.data.data.length){
+
+            return res.status(404).json({
+                error:"User not found"
+            });
+
+        }
+
+        const user = userRes.data.data[0];
+
+        const userId = user.id;
+
+        /* AVATAR THUMBNAIL */
+
+        const thumbRes = await axios.get(
+            `https://thumbnails.roblox.com/v1/users/avatar?userIds=${userId}&size=720x720&format=Png&isCircular=false`
+        );
+
+        /* AVATAR DETAILS */
+
+        const avatarRes = await axios.get(
+            `https://avatar.roblox.com/v1/users/${userId}/currently-wearing`
+        );
+
+        res.json({
+
+            success:true,
+
+            username:user.name,
+
+            displayName:user.displayName,
+
+            userId:userId,
+
+            thumbnail:
+            thumbRes.data.data[0]?.imageUrl,
+
+            assets:
+            avatarRes.data.assetIds
+
+        });
+
+    }catch(err){
+
+        console.log(err.response?.data || err.message);
+
+        res.status(500).json({
+            error:"Failed to fetch avatar"
+        });
+
+    }
+
+});
