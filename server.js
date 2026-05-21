@@ -125,6 +125,37 @@ app.get("/avatar/:username", async(req,res)=>{
             `https://avatar.roblox.com/v1/users/${userId}/currently-wearing`
         );
 
+        const assetDetails = await Promise.all(
+
+    assets.map(async(assetId)=>{
+
+        try{
+
+            const thumbRes = await axios.get(
+                `https://thumbnails.roblox.com/v1/assets?assetIds=${assetId}&size=420x420&format=Png`
+            );
+
+            const thumb =
+            thumbRes.data.data[0]?.imageUrl;
+
+            return{
+                id:assetId,
+                image:thumb
+            };
+
+        }catch{
+
+            return{
+                id:assetId,
+                image:null
+            };
+
+        }
+
+    })
+
+);
+
         res.json({
 
             success:true,
