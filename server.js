@@ -119,6 +119,12 @@ app.get("/avatar/:username", async(req,res)=>{
             `https://thumbnails.roblox.com/v1/users/avatar?userIds=${userId}&size=720x720&format=Png&isCircular=false`
         );
 
+            /* 3D THUMBNAIL */
+
+const thumb3dRes = await axios.get(
+    `https://thumbnails.roblox.com/v1/users/avatar-3d?userIds=${userId}`
+);
+
         /* AVATAR DETAILS */
 
 const avatarRes = await axios.get(
@@ -175,8 +181,13 @@ res.json({
     thumbnail:
     thumbRes.data.data[0]?.imageUrl,
 
+    thumbnail3d:
+    thumb3dRes.data.data[0]?.imageUrl,
+
+
     assets:assetDetails
 
+    
 });
 
 }catch(err){
