@@ -121,11 +121,17 @@ app.get("/avatar/:username", async(req,res)=>{
 
         /* AVATAR DETAILS */
 
-        const avatarRes = await axios.get(
-            `https://avatar.roblox.com/v1/users/${userId}/currently-wearing`
-        );
+const avatarRes = await axios.get(
+    `https://avatar.roblox.com/v1/users/${userId}/currently-wearing`
+);
 
-        const assetDetails = await Promise.all(
+/* ASSET IDS */
+
+const assets = avatarRes.data.assetIds;
+
+/* ASSET DETAILS */
+
+const assetDetails = await Promise.all(
 
     assets.map(async(assetId)=>{
 
@@ -156,32 +162,22 @@ app.get("/avatar/:username", async(req,res)=>{
 
 );
 
-        res.json({
+res.json({
 
-            success:true,
+    success:true,
 
-            username:user.name,
+    username:user.name,
 
-            displayName:user.displayName,
+    displayName:user.displayName,
 
-            userId:userId,
+    userId:userId,
 
-            thumbnail:
-            thumbRes.data.data[0]?.imageUrl,
+    thumbnail:
+    thumbRes.data.data[0]?.imageUrl,
 
-            assets:
-            avatarRes.data.assetIds
-
-        });
-
-    }catch(err){
-
-        console.log(err.response?.data || err.message);
-
-        res.status(500).json({
-            error:"Failed to fetch avatar"
-        });
-
-    }
+    assets:assetDetails
 
 });
+
+
+    
