@@ -179,5 +179,15 @@ res.json({
 
 });
 
+}catch(err){
 
+        console.log(err.response?.data || err.message);
+
+        res.status(500).json({
+            error:"Failed to fetch avatar"
+        });
+
+    }
+
+});
     
