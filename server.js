@@ -143,6 +143,8 @@ const assetDetails = await Promise.all(
 
         try{
 
+            /* THUMBNAIL */
+
             const thumbRes = await axios.get(
                 `https://thumbnails.roblox.com/v1/assets?assetIds=${assetId}&size=420x420&format=Png`
             );
@@ -150,16 +152,38 @@ const assetDetails = await Promise.all(
             const thumb =
             thumbRes.data.data[0]?.imageUrl;
 
+            /* ASSET DETAILS */
+
+            const detailsRes = await axios.get(
+                `https://economy.roblox.com/v2/assets/${assetId}/details`
+            );
+
+            const details = detailsRes.data;
+
             return{
+
                 id:assetId,
-                image:thumb
+
+                image:thumb,
+
+                name:details.Name,
+
+                assetType:details.AssetTypeId
+
             };
 
         }catch{
 
             return{
+
                 id:assetId,
-                image:null
+
+                image:null,
+
+                name:`Asset ${assetId}`,
+
+                assetType:null
+
             };
 
         }
@@ -167,7 +191,6 @@ const assetDetails = await Promise.all(
     })
 
 );
-
 res.json({
 
     success:true,
@@ -202,3 +225,40 @@ res.json({
 
 });
     
+/* DOWNLOAD ASSET */
+
+app.get("/download/:id", async(req,res)=>{
+
+    try{
+
+        const assetId = req.params.id;
+
+        /* ROBLOX ASSET DELIVERY */
+
+        const assetRes = await axios.get(
+            `https://assetdelivery.roblox.com/v1/asset/?id=${assetId}`,
+            {
+                responseType:"stream"
+            }
+        );
+
+        /* FILE DOWNLOAD */
+
+        res.setHeader(
+            "Content-Disposition",
+            `attachment; filename="asset_${assetId}"`
+        );
+
+        assetRes.data.pipe(res);
+
+    }catch(err){
+
+        console.log(err.response?.data || err.message);
+
+        res.status(500).send(
+            "Failed to download asset."
+        );
+
+    }
+
+});
