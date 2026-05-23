@@ -75,12 +75,6 @@ app.get("/auth/discord/callback", async(req,res)=>{
 
 });
 
-/* START SERVER */
-
-app.listen(3000,()=>{
-    console.log("Server running");
-});
-
 /* ROBLOX USER JSON */
 
 /* AVATAR FETCHER */
@@ -262,3 +256,13 @@ app.get("/download/:id", async(req,res)=>{
     }
 
 });
+
+
+
+/* START SERVER */
+
+app.listen(3000,()=>{
+    console.log("Server running");
+});
+
+
