@@ -127,7 +127,7 @@ const avatarRes = await axios.get(
 
 /* ASSET IDS */
 
-const assets = avatarRes.data.assetIds;
+const assets = avatarRes.data.assetIds || [];
 
 /* ASSET DETAILS */
 
@@ -261,8 +261,9 @@ app.get("/download/:id", async(req,res)=>{
 
 /* START SERVER */
 
-app.listen(3000,()=>{
+const PORT = process.env.PORT || 10000;
+
+app.listen(PORT, () => {
     console.log("Server running");
 });
-
 
