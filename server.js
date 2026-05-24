@@ -146,8 +146,7 @@ const assets =
 console.log("OUTFIT RESPONSE:", outfitRes.data);
 
 /* ASSET IDS */
-
-const assets = avatarRes.data.assetIds || [];
+        
         console.log("AVATAR RESPONSE:", avatarRes.data);
 
 /* ASSET DETAILS */
