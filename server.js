@@ -220,12 +220,15 @@ app.get("/download/:id", async(req,res)=>{
 
         /* ROBLOX ASSET DELIVERY */
 
-        const assetRes = await axios.get(
-            `https://assetdelivery.roblox.com/v1/asset/?id=${assetId}`,
-            {
-                responseType:"stream"
-            }
-        );
+const assetRes = await axios.get(
+    `https://assetdelivery.roblox.com/v1/asset/?id=${assetId}`,
+    {
+        responseType:"stream",
+        headers: {
+            "User-Agent": "Mozilla/5.0"
+        }
+    }
+);
 
         /* FILE DOWNLOAD */
 
