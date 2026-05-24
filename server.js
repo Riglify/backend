@@ -145,10 +145,6 @@ const assets =
 
 console.log("OUTFIT RESPONSE:", outfitRes.data);
 
-/* ASSET IDS */
-        
-        console.log("AVATAR RESPONSE:", avatarRes.data);
-
 /* ASSET DETAILS */
 
 const assetDetails = await Promise.all(
