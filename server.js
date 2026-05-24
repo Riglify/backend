@@ -136,14 +136,14 @@ const thumb3dRes = await axios.get(
 
         /* AVATAR DETAILS */
 
-const avatarRes = await axios.get(
-  `https://avatar.roblox.com/v1/users/${userId}/currently-wearing`,
-  {
-    headers: {
-      "User-Agent": "Mozilla/5.0"
-    }
-  }
+const outfitRes = await axios.get(
+  `https://avatar.roblox.com/v1/users/${userId}/avatar`
 );
+
+const assets =
+  outfitRes.data?.assets?.map(asset => asset.id) || [];
+
+console.log("OUTFIT RESPONSE:", outfitRes.data);
 
 /* ASSET IDS */
 
