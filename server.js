@@ -137,7 +137,12 @@ const thumb3dRes = await axios.get(
         /* AVATAR DETAILS */
 
 const avatarRes = await axios.get(
-    `https://avatar.roblox.com/v1/users/${userId}/currently-wearing`
+  `https://avatar.roblox.com/v1/users/${userId}/currently-wearing`,
+  {
+    headers: {
+      "User-Agent": "Mozilla/5.0"
+    }
+  }
 );
 
 /* ASSET IDS */
@@ -150,22 +155,23 @@ const assets = avatarRes.data.assetIds || [];
 const assetDetails = await Promise.all(
   assets.map(async (assetId) => {
     try {
-      const [thumbRes, detailsRes] = await Promise.all([
-        axios.get(
-          `https://thumbnails.roblox.com/v1/assets?assetIds=${assetId}&size=420x420&format=Png`,
-          { headers: { "User-Agent": "Mozilla/5.0" } }
-        ),
-        axios.get(
-          `https://economy.roblox.com/v2/assets/${assetId}/details`,
-          { headers: { "User-Agent": "Mozilla/5.0" } }
-        )
-      ]);
+      const thumbRes = await axios.get(
+  `https://thumbnails.roblox.com/v1/assets?assetIds=${assetId}&size=420x420&format=Png`,
+  {
+    headers: { "User-Agent": "Mozilla/5.0" }
+  }
+);
+
+const details = {
+  Name: `Asset ${assetId}`,
+  AssetTypeId: null
+};
 
       return {
         id: assetId,
         image: thumbRes.data?.data?.[0]?.imageUrl || null,
-        name: detailsRes.data?.Name || `Asset ${assetId}`,
-        assetType: detailsRes.data?.AssetTypeId || null
+        name: details.Name,
+assetType: details.AssetTypeId
       };
 
     } catch {
