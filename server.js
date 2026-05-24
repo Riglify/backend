@@ -87,13 +87,19 @@ app.get("/avatar/:username", async(req,res)=>{
 
         /* USER ID */
 
-        const userRes = await axios.post(
-            "https://users.roblox.com/v1/usernames/users",
-            {
-                usernames:[username],
-                excludeBannedUsers:false
-            }
-        );
+        /* USER ID */
+const userRes = await axios.post(
+  "https://users.roblox.com/v1/usernames/users",
+  {
+    usernames: [username],
+    excludeBannedUsers: false
+  },
+  {
+    headers: {
+      "Content-Type": "application/json"
+    }
+  }
+);
 
         if(!userRes.data.data.length){
 
@@ -110,14 +116,23 @@ app.get("/avatar/:username", async(req,res)=>{
         /* AVATAR THUMBNAIL */
 
         const thumbRes = await axios.get(
-            `https://thumbnails.roblox.com/v1/users/avatar?userIds=${userId}&size=720x720&format=Png&isCircular=false`
-        );
+  `https://thumbnails.roblox.com/v1/users/avatar?userIds=${userId}&size=720x720&format=Png&isCircular=false`,
+  {
+    headers: { "User-Agent": "Mozilla/5.0" }
+  }
+);
+        const thumbUrl = thumbRes.data?.data?.[0]?.imageUrl || null;
 
             /* 3D THUMBNAIL */
 
 const thumb3dRes = await axios.get(
-    `https://thumbnails.roblox.com/v1/users/avatar-3d?userIds=${userId}`
+  `https://thumbnails.roblox.com/v1/users/avatar-3d?userIds=${userId}`,
+  {
+    headers: { "User-Agent": "Mozilla/5.0" }
+  }
 );
+        const thumb3dUrl =
+  thumb3dRes.data?.data?.[0]?.imageUrl || null;
 
         /* AVATAR DETAILS */
 
@@ -128,63 +143,43 @@ const avatarRes = await axios.get(
 /* ASSET IDS */
 
 const assets = avatarRes.data.assetIds || [];
+        console.log("AVATAR RESPONSE:", avatarRes.data);
 
 /* ASSET DETAILS */
 
 const assetDetails = await Promise.all(
+  assets.map(async (assetId) => {
+    try {
+      const [thumbRes, detailsRes] = await Promise.all([
+        axios.get(
+          `https://thumbnails.roblox.com/v1/assets?assetIds=${assetId}&size=420x420&format=Png`,
+          { headers: { "User-Agent": "Mozilla/5.0" } }
+        ),
+        axios.get(
+          `https://economy.roblox.com/v2/assets/${assetId}/details`,
+          { headers: { "User-Agent": "Mozilla/5.0" } }
+        )
+      ]);
 
-    assets.map(async(assetId)=>{
+      return {
+        id: assetId,
+        image: thumbRes.data?.data?.[0]?.imageUrl || null,
+        name: detailsRes.data?.Name || `Asset ${assetId}`,
+        assetType: detailsRes.data?.AssetTypeId || null
+      };
 
-        try{
-
-            /* THUMBNAIL */
-
-            const thumbRes = await axios.get(
-                `https://thumbnails.roblox.com/v1/assets?assetIds=${assetId}&size=420x420&format=Png`
-            );
-
-            const thumb =
-            thumbRes.data.data[0]?.imageUrl;
-
-            /* ASSET DETAILS */
-
-            const detailsRes = await axios.get(
-                `https://economy.roblox.com/v2/assets/${assetId}/details`
-            );
-
-            const details = detailsRes.data;
-
-            return{
-
-                id:assetId,
-
-                image:thumb,
-
-                name:details.Name,
-
-                assetType:details.AssetTypeId
-
-            };
-
-        }catch{
-
-            return{
-
-                id:assetId,
-
-                image:null,
-
-                name:`Asset ${assetId}`,
-
-                assetType:null
-
-            };
-
-        }
-
-    })
-
+    } catch {
+      return {
+        id: assetId,
+        image: null,
+        name: `Asset ${assetId}`,
+        assetType: null
+      };
+    }
+  })
 );
+        
+        
 res.json({
 
     success:true,
@@ -195,12 +190,8 @@ res.json({
 
     userId:userId,
 
-    thumbnail:
-    thumbRes.data.data[0]?.imageUrl,
-
-    thumbnail3d:
-    thumb3dRes.data.data[0]?.imageUrl,
-
+thumbnail: thumbUrl,
+thumbnail3d: thumb3dUrl,
 
     assets:assetDetails
 
@@ -266,4 +257,5 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
     console.log("Server running");
 });
+
 
