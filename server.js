@@ -252,6 +252,74 @@ const assetRes = await axios.get(
 
 });
 
+/* GITHUB LOGIN */
+
+app.get("/auth/github", (req,res)=>{
+
+    const url =
+`https://github.com/login/oauth/authorize?client_id=${process.env.GITHUB_CLIENT_ID}&scope=read:user user:email`;
+
+    res.redirect(url);
+
+});
+
+/* GITHUB CALLBACK */
+
+app.get("/auth/github/callback", async(req,res)=>{
+
+    const code = req.query.code;
+
+    try{
+
+        const tokenRes = await axios.post(
+            "https://github.com/login/oauth/access_token",
+            {
+                client_id:
+                process.env.GITHUB_CLIENT_ID,
+
+                client_secret:
+                process.env.GITHUB_CLIENT_SECRET,
+
+                code:code
+            },
+            {
+                headers:{
+                    Accept:"application/json"
+                }
+            }
+        );
+
+        const accessToken =
+        tokenRes.data.access_token;
+
+        const userRes = await axios.get(
+            "https://api.github.com/user",
+            {
+                headers:{
+                    Authorization:
+                    `Bearer ${accessToken}`
+                }
+            }
+        );
+
+        const user = userRes.data;
+
+        res.redirect(
+`https://riglify.github.io/?github=${encodeURIComponent(user.login)}&avatar=${encodeURIComponent(user.avatar_url)}`
+        );
+
+    }catch(err){
+
+        console.log(
+            err.response?.data || err.message
+        );
+
+        res.send("GitHub OAuth failed.");
+
+    }
+
+});
+
 
 
 /* START SERVER */
