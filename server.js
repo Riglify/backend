@@ -51,13 +51,13 @@ app.get("/auth/discord/callback", async(req,res)=>{
         const accessToken = tokenRes.data.access_token;
 
         const userRes = await axios.get(
-            "https://discord.com/api/users/@me",
-            {
-                headers:{
-                    Authorization:`Bearer ${accessToken}`
-                }
-            }
-        );
+    "https://discord.com/api/users/@me",
+    {
+        headers:{
+            Authorization:`Bearer ${accessToken}`
+        }
+    }
+);
 
         const user = userRes.data;
 
@@ -83,35 +83,46 @@ app.get("/avatar/:username", async(req,res)=>{
 
     try{
 
-        const username = req.params.username;
+        const input = req.params.username;
 
-        /* USER ID */
+let userId;
+let user;
 
-        /* USER ID */
-const userRes = await axios.post(
-  "https://users.roblox.com/v1/usernames/users",
-  {
-    usernames: [username],
-    excludeBannedUsers: false
-  },
-  {
-    headers: {
-      "Content-Type": "application/json"
+/* IF INPUT IS USER ID */
+
+if(/^\d+$/.test(input)){
+
+    userId = input;
+
+    const userInfo = await axios.get(
+        `https://users.roblox.com/v1/users/${userId}`
+    );
+
+    user = userInfo.data;
+
+}else{
+
+    /* Username lookup */
+    const userRes = await axios.post(
+      "https://users.roblox.com/v1/usernames/users",
+      {
+        usernames: [input],
+        excludeBannedUsers: false
+      }
+    );
+
+    if(!userRes.data.data.length){
+
+        return res.status(404).json({
+            error:"User not found"
+        });
+
     }
-  }
-);
 
-        if(!userRes.data.data.length){
+    user = userRes.data.data[0];
+    userId = user.id;
 
-            return res.status(404).json({
-                error:"User not found"
-            });
-
-        }
-
-        const user = userRes.data.data[0];
-
-        const userId = user.id;
+}
 
         /* AVATAR THUMBNAIL */
 
@@ -201,13 +212,16 @@ thumbnail3d: thumb3dUrl,
 
 }catch(err){
 
-        console.log(err.response?.data || err.message);
+    console.log("FULL ERROR:");
+    console.log(err.response?.data);
+    console.log(err.response?.status);
+    console.log(err.message);
 
-        res.status(500).json({
-            error:"Failed to fetch avatar"
-        });
+    res.status(500).json({
+        error:"Failed to fetch avatar"
+    });
 
-    }
+}
 
 });
     
@@ -329,5 +343,4 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
     console.log("Server running");
 });
-
 
