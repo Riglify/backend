@@ -85,8 +85,10 @@ app.get("/avatar/:username", async(req,res)=>{
 
         const input = req.params.username;
 
-let userId;
-let user;
+        console.log("Looking up:", input);
+
+        let userId;
+        let user;
 
 /* IF INPUT IS USER ID */
 
@@ -120,12 +122,16 @@ if(/^\d+$/.test(input)){
     }
 
     user = userRes.data.data[0];
-    userId = user.id;
+userId = user.id;
+
+console.log("Found user:", user);
+console.log("User ID:", userId);
 
 }
 
         /* AVATAR THUMBNAIL */
-
+console.log("Fetching thumbnail...");
+        
         const thumbRes = await axios.get(
   `https://thumbnails.roblox.com/v1/users/avatar?userIds=${userId}&size=720x720&format=Png&isCircular=false`,
   {
@@ -135,7 +141,8 @@ if(/^\d+$/.test(input)){
         const thumbUrl = thumbRes.data?.data?.[0]?.imageUrl || null;
 
             /* 3D THUMBNAIL */
-
+console.log("Fetching 3D thumbnail...");
+        
 const thumb3dRes = await axios.get(
   `https://thumbnails.roblox.com/v1/users/avatar-3d?userIds=${userId}`,
   {
@@ -146,7 +153,8 @@ const thumb3dRes = await axios.get(
   thumb3dRes.data?.data?.[0]?.imageUrl || null;
 
         /* AVATAR DETAILS */
-
+console.log("Fetching avatar details...");
+        
 const outfitRes = await axios.get(
   `https://avatar.roblox.com/v1/users/${userId}/avatar`
 );
