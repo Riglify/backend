@@ -140,7 +140,7 @@ console.log("Fetching thumbnail...");
 );
         const thumbUrl = thumbRes.data?.data?.[0]?.imageUrl || null;
 
-            /* 3D THUMBNAIL */
+            /* 3D THUMBNAIL */ /*
 console.log("Fetching 3D thumbnail...");
         
 const thumb3dRes = await axios.get(
@@ -150,7 +150,8 @@ const thumb3dRes = await axios.get(
   }
 );
         const thumb3dUrl =
-  thumb3dRes.data?.data?.[0]?.imageUrl || null;
+  thumb3dRes.data?.data?.[0]?.imageUrl || null;*/
+        const thumb3dUrl = null;
 
         /* AVATAR DETAILS */
 console.log("Fetching avatar details...");
