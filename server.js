@@ -140,18 +140,32 @@ console.log("Fetching thumbnail...");
 );
         const thumbUrl = thumbRes.data?.data?.[0]?.imageUrl || null;
 
-            /* 3D THUMBNAIL */ /*
+            /* 3D THUMBNAIL */
+let thumb3dUrl = null;
+
 console.log("Fetching 3D thumbnail...");
-        
-const thumb3dRes = await axios.get(
-  `https://thumbnails.roblox.com/v1/users/avatar-3d?userIds=${userId}`,
-  {
-    headers: { "User-Agent": "Mozilla/5.0" }
-  }
-);
-        const thumb3dUrl =
-  thumb3dRes.data?.data?.[0]?.imageUrl || null;*/
-        const thumb3dUrl = null;
+
+try {
+
+    const thumb3dRes = await axios.get(
+        `https://thumbnails.roblox.com/v1/users/avatar-3d?userIds=${userId}`,
+        {
+            headers: { "User-Agent": "Mozilla/5.0" }
+        }
+    );
+
+    thumb3dUrl =
+        thumb3dRes.data?.data?.[0]?.imageUrl || null;
+
+    console.log("3D thumbnail success");
+
+} catch(err) {
+
+    console.log("3D THUMBNAIL FAILED");
+    console.log(err.response?.status);
+    console.log(err.response?.data);
+
+}
 
         /* AVATAR DETAILS */
 console.log("Fetching avatar details...");
