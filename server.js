@@ -279,35 +279,31 @@ app.get("/avatar/:username", async(req,res)=>{
 
 });
     
-/* DOWNLOAD ASSET */
+/* ==========================================================================
+   RIGLIFY DOWNLOAD SYSTEM - REFACTORED CODE 
+   ========================================================================== */
 
-app.get('/download/:id', (req, res) => {
+app.get('/download/:id', async (req, res) => {
+    const assetId = req.params.id;
+
     // Manually allow your website to read the files without the cors package!
     res.setHeader('Access-Control-Allow-Origin', '*'); 
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST');
-    
-    // Your existing code that finds and sends the file goes here...
-});
 
-        /* FILE DOWNLOAD */
-
+    try {
+        // Set the attachment header so the browser downloads it as a file
         res.setHeader(
             "Content-Disposition",
             `attachment; filename="asset_${assetId}"`
         );
 
+        // Pipe the backend data stream directly to the response
         assetRes.data.pipe(res);
 
-    }catch(err){
-
+    } catch (err) {
         console.log(err.response?.data || err.message);
-
-        res.status(500).send(
-            "Failed to download asset."
-        );
-
+        res.status(500).send("Failed to download asset.");
     }
-
 });
 
 /* GITHUB LOGIN */
