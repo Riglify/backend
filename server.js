@@ -281,23 +281,13 @@ app.get("/avatar/:username", async(req,res)=>{
     
 /* DOWNLOAD ASSET */
 
-app.get("/download/:id", async(req,res)=>{
-
-    try{
-
-        const assetId = req.params.id;
-
-        /* ROBLOX ASSET DELIVERY */
-
-const assetRes = await axios.get(
-    `https://assetdelivery.roblox.com/v1/asset/?id=${assetId}`,
-    {
-        responseType:"stream",
-        headers: {
-            "User-Agent": "Mozilla/5.0"
-        }
-    }
-);
+app.get('/download/:id', (req, res) => {
+    // Manually allow your website to read the files without the cors package!
+    res.setHeader('Access-Control-Allow-Origin', '*'); 
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST');
+    
+    // Your existing code that finds and sends the file goes here...
+});
 
         /* FILE DOWNLOAD */
 
