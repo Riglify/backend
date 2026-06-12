@@ -168,77 +168,67 @@ try {
 }
 
         /* AVATAR DETAILS */
-console.log("Fetching avatar details...");
+        console.log("Fetching avatar details...");
         
-const outfitRes = await axios.get(
-  `https://avatar.roblox.com/v1/users/${userId}/avatar`
-);
-
-const assets =
-  outfitRes.data?.assets?.map(asset => asset.id) || [];
-
-console.log("OUTFIT RESPONSE:", outfitRes.data);
-
-/* --- NEW: BULK FETCH REAL NAMES FROM ROBLOX --- */
-let nameMap = {};
-let typeMap = {};
-
-if (assets.length > 0) {
-    console.log("Fetching real names from catalog API...");
-    try {
-        const itemDetailsRequest = assets.map(id => ({
-            itemType: "Asset",
-            id: parseInt(id)
-        }));
-
-        const robloxCatalogRes = await axios.post(
-            "https://catalog.roblox.com/v1/catalog/items/details",
-            { items: itemDetailsRequest },
-            { headers: { "User-Agent": "Mozilla/5.0", "Content-Type": "application/json" } }
+        const outfitRes = await axios.get(
+          `https://avatar.roblox.com/v1/users/${userId}/avatar`
         );
 
-        if (robloxCatalogRes.data && robloxCatalogRes.data.data) {
-            robloxCatalogRes.data.data.forEach(item => {
-                nameMap[item.id] = item.name;
-                typeMap[item.id] = item.assetType; // Pulls "Hat", "Shirt", etc.
-            });
-        }
-    } catch (catalogErr) {
-        console.log("ROBLOX CATALOG NAME FETCH FAILED:", catalogErr.message);
-    }
-}
-/* --- END OF REAL NAMES FETCH --- */
+        const assets = outfitRes.data?.assets?.map(asset => asset.id) || [];
+        console.log("OUTFIT RESPONSE ASSETS:", assets);
 
-/* ASSET DETAILS MAPPER */
+        /* ASSET DETAILS MAPPER (Fetches true names & types from Roblox) */
+        const assetDetails = await Promise.all(
+          assets.map(async (assetId) => {
+            try {
+              // 1. Fetch the item image thumbnail
+              const thumbRes = await axios.get(
+                `https://thumbnails.roblox.com/v1/assets?assetIds=${assetId}&size=420x420&format=Png`,
+                { headers: { "User-Agent": "Mozilla/5.0" } }
+              );
+              const imageUrl = thumbRes.data?.data?.[0]?.imageUrl || null;
 
-const assetDetails = await Promise.all(
-  assets.map(async (assetId) => {
-    try {
-      const thumbRes = await axios.get(
-  `https://thumbnails.roblox.com/v1/assets?assetIds=${assetId}&size=420x420&format=Png`,
-  {
-    headers: { "User-Agent": "Mozilla/5.0" }
-  }
-);
+              // 2. Fetch the true product details (Name and Asset Type) from Roblox's product engine
+              let realName = `Asset ${assetId}`;
+              let realType = null;
 
-      return {
-        id: assetId,
-        image: thumbRes.data?.data?.[0]?.imageUrl || null,
-        // Uses the real name parsed from the catalog, otherwise defaults to the ID placeholder
-        name: nameMap[assetId] || `Asset ${assetId}`,
-        assetType: typeMap[assetId] || null
-      };
+              try {
+                const detailsRes = await axios.get(
+                  `https://economy.roblox.com/v2/assets/${assetId}/details`,
+                  { headers: { "User-Agent": "Mozilla/5.0" } }
+                );
+                
+                if (detailsRes.data) {
+                  realName = detailsRes.data.Name || detailsRes.data.name || realName;
+                  realType = detailsRes.data.AssetTypeId || detailsRes.data.assetType || null;
+                  
+                  // Optional: Convert a number ID type to a clean readable word if Roblox sends raw IDs
+                  if (typeof realType === 'number') {
+                      const typeMap = { 8: "Hat", 41: "HairAccessory", 42: "FaceAccessory", 11: "Shirt", 12: "Pants", 2: "TShirt" };
+                      realType = typeMap[realType] || "Accessory";
+                  }
+                }
+              } catch (detailsErr) {
+                console.log(`Failed item info check for ${assetId}:`, detailsErr.message);
+              }
 
-    } catch {
-      return {
-        id: assetId,
-        image: null,
-        name: nameMap[assetId] || `Asset ${assetId}`,
-        assetType: typeMap[assetId] || null
-      };
-    }
-  })
-);
+              return {
+                id: assetId,
+                image: imageUrl,
+                name: realName,
+                assetType: realType
+              };
+
+            } catch (err) {
+              return {
+                id: assetId,
+                image: null,
+                name: `Asset ${assetId}`,
+                assetType: null
+              };
+            }
+          })
+        );
         
         
 res.json({
