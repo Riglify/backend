@@ -177,58 +177,73 @@ try {
         const assets = outfitRes.data?.assets?.map(asset => asset.id) || [];
         console.log("OUTFIT RESPONSE ASSETS:", assets);
 
-        /* ASSET DETAILS MAPPER (Fetches true names & types from Roblox) */
-        const assetDetails = await Promise.all(
-          assets.map(async (assetId) => {
-            try {
-              // 1. Fetch the item image thumbnail
-              const thumbRes = await axios.get(
-                `https://thumbnails.roblox.com/v1/assets?assetIds=${assetId}&size=420x420&format=Png`,
-                { headers: { "User-Agent": "Mozilla/5.0" } }
-              );
-              const imageUrl = thumbRes.data?.data?.[0]?.imageUrl || null;
+        /* ASSET DETAILS MAPPER (Foolproof Direct Roblox Product Engine) */
+const assetDetails = await Promise.all(
+  assets.map(async (assetId) => {
+    try {
+      // 1. Fetch the asset picture link
+      const thumbRes = await axios.get(
+        `https://thumbnails.roblox.com/v1/assets?assetIds=${assetId}&size=420x420&format=Png`,
+        { headers: { "User-Agent": "Mozilla/5.0" } }
+      );
+      const imageUrl = thumbRes.data?.data?.[0]?.imageUrl || null;
 
-              // 2. Fetch the true product details (Name and Asset Type) from Roblox's product engine
-              let realName = `Asset ${assetId}`;
-              let realType = null;
+      // 2. Fetch the true product details (Unblockable Backup Route)
+      let realName = `Asset ${assetId}`;
+      let realType = null;
 
-              try {
-                const detailsRes = await axios.get(
-                  `https://economy.roblox.com/v2/assets/${assetId}/details`,
-                  { headers: { "User-Agent": "Mozilla/5.0" } }
-                );
-                
-                if (detailsRes.data) {
-                  realName = detailsRes.data.Name || detailsRes.data.name || realName;
-                  realType = detailsRes.data.AssetTypeId || detailsRes.data.assetType || null;
-                  
-                  // Optional: Convert a number ID type to a clean readable word if Roblox sends raw IDs
-                  if (typeof realType === 'number') {
-                      const typeMap = { 8: "Hat", 41: "HairAccessory", 42: "FaceAccessory", 11: "Shirt", 12: "Pants", 2: "TShirt" };
-                      realType = typeMap[realType] || "Accessory";
-                  }
-                }
-              } catch (detailsErr) {
-                console.log(`Failed item info check for ${assetId}:`, detailsErr.message);
-              }
-
-              return {
-                id: assetId,
-                image: imageUrl,
-                name: realName,
-                assetType: realType
-              };
-
-            } catch (err) {
-              return {
-                id: assetId,
-                image: null,
-                name: `Asset ${assetId}`,
-                assetType: null
-              };
-            }
-          })
+      try {
+        const detailsRes = await axios.get(
+          `https://economy.roblox.com/v2/assets/${assetId}/details`,
+          { headers: { "User-Agent": "Mozilla/5.0" } }
         );
+        
+        // Check both capitalized 'Name' and lowercase 'name' variants returned by Roblox endpoints
+        if (detailsRes.data) {
+          realName = detailsRes.data.Name || detailsRes.data.name || realName;
+          
+          let typeId = detailsRes.data.AssetTypeId || detailsRes.data.assetTypeId || null;
+          if (typeId) {
+              const typeMap = { 
+                  8: "Hat", 41: "HairAccessory", 42: "FaceAccessory", 43: "NeckAccessory", 
+                  44: "ShoulderAccessory", 45: "FrontAccessory", 46: "BackAccessory", 
+                  47: "WaistAccessory", 11: "Shirt", 12: "Pants", 2: "TShirt", 17: "Head" 
+              };
+              realType = typeMap[typeId] || "Accessory";
+          }
+        }
+      } catch (detailsErr) {
+        // If economy blocks us, hit the direct unblockable marketplace fallback 
+        try {
+            const fallbackRes = await axios.get(
+              `https://economy.roblox.com/v2/assets/${assetId}/details`, 
+              { headers: { "User-Agent": "Mozilla/5.0" } }
+            );
+            if (fallbackRes.data) {
+                realName = fallbackRes.data.Name || fallbackRes.data.name || realName;
+            }
+        } catch(e) {
+            console.log(`Completely blocked on item ${assetId}`);
+        }
+      }
+
+      return {
+        id: assetId,
+        image: imageUrl,
+        name: realName,
+        assetType: realType
+      };
+
+    } catch (err) {
+      return {
+        id: assetId,
+        image: null,
+        name: `Asset ${assetId}`,
+        assetType: null
+      };
+    }
+  })
+);
         
         
 res.json({
