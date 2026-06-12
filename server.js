@@ -177,40 +177,41 @@ try {
         const assets = outfitRes.data?.assets?.map(asset => asset.id) || [];
         console.log("OUTFIT RESPONSE ASSETS:", assets);
 
-        /* ASSET DETAILS MAPPER (Bulk Unblockable Single-Ping Engine) */
+        /* ASSET DETAILS MAPPER (RoProxy Bulk Tunnel) */
         let nameMap = {};
         let typeMap = {};
 
         if (assets.length > 0) {
-            console.log("Bulk fetching asset names from Economy Multiget API...");
+            console.log("Bulk fetching asset names via RoProxy Catalog API...");
             try {
-                // Format the assets array into the exact body structure Roblox expects
-                const assetIdsRequest = assets.map(id => parseInt(id));
+                // Convert the user assets into the exact array wrapper payload Roblox wants
+                const itemDetailsRequest = assets.map(id => ({
+                    itemType: "Asset",
+                    id: parseInt(id)
+                }));
 
+                // Hitting catalog.roproxy.com completely bypasses Render datacenter ip blocks!
                 const bulkRes = await axios.post(
-                    "https://economy.roblox.com/v1/assets-details",
-                    { assetIds: assetIdsRequest },
+                    "https://catalog.roproxy.com/v1/catalog/items/details",
+                    { items: itemDetailsRequest },
                     { headers: { "User-Agent": "Mozilla/5.0", "Content-Type": "application/json" } }
                 );
 
-                if (bulkRes.data && Array.isArray(bulkRes.data)) {
-                    bulkRes.data.forEach(item => {
-                        // Roblox returns capitalized object names from this endpoint
-                        nameMap[item.AssetId] = item.Name;
-                        
-                        // Capture the item types (Hat, Shirt, HairAccessory, etc.)
-                        typeMap[item.AssetId] = item.AssetTypeCode;
+                if (bulkRes.data && bulkRes.data.data) {
+                    bulkRes.data.data.forEach(item => {
+                        nameMap[item.id] = item.name;
+                        typeMap[item.id] = item.assetType;
                     });
                 }
             } catch (bulkErr) {
-                console.log("ROBLOX BULK ENGINES BLOCKED:", bulkErr.message);
+                console.log("ROPROXY BULK API DETECTED ERROR:", bulkErr.message);
             }
         }
 
         const assetDetails = await Promise.all(
           assets.map(async (assetId) => {
             try {
-              // Fetch item images normally (thumbnails API is fine with multiple requests)
+              // 1. Fetch item pictures using standard thumbnails endpoint (no proxy needed for images)
               const thumbRes = await axios.get(
                 `https://thumbnails.roblox.com/v1/assets?assetIds=${assetId}&size=420x420&format=Png`,
                 { headers: { "User-Agent": "Mozilla/5.0" } }
