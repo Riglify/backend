@@ -179,7 +179,37 @@ const assets =
 
 console.log("OUTFIT RESPONSE:", outfitRes.data);
 
-/* ASSET DETAILS */
+/* --- NEW: BULK FETCH REAL NAMES FROM ROBLOX --- */
+let nameMap = {};
+let typeMap = {};
+
+if (assets.length > 0) {
+    console.log("Fetching real names from catalog API...");
+    try {
+        const itemDetailsRequest = assets.map(id => ({
+            itemType: "Asset",
+            id: parseInt(id)
+        }));
+
+        const robloxCatalogRes = await axios.post(
+            "https://catalog.roblox.com/v1/catalog/items/details",
+            { items: itemDetailsRequest },
+            { headers: { "User-Agent": "Mozilla/5.0", "Content-Type": "application/json" } }
+        );
+
+        if (robloxCatalogRes.data && robloxCatalogRes.data.data) {
+            robloxCatalogRes.data.data.forEach(item => {
+                nameMap[item.id] = item.name;
+                typeMap[item.id] = item.assetType; // Pulls "Hat", "Shirt", etc.
+            });
+        }
+    } catch (catalogErr) {
+        console.log("ROBLOX CATALOG NAME FETCH FAILED:", catalogErr.message);
+    }
+}
+/* --- END OF REAL NAMES FETCH --- */
+
+/* ASSET DETAILS MAPPER */
 
 const assetDetails = await Promise.all(
   assets.map(async (assetId) => {
@@ -191,24 +221,20 @@ const assetDetails = await Promise.all(
   }
 );
 
-const details = {
-  Name: `Asset ${assetId}`,
-  AssetTypeId: null
-};
-
       return {
         id: assetId,
         image: thumbRes.data?.data?.[0]?.imageUrl || null,
-        name: details.Name,
-assetType: details.AssetTypeId
+        // Uses the real name parsed from the catalog, otherwise defaults to the ID placeholder
+        name: nameMap[assetId] || `Asset ${assetId}`,
+        assetType: typeMap[assetId] || null
       };
 
     } catch {
       return {
         id: assetId,
         image: null,
-        name: `Asset ${assetId}`,
-        assetType: null
+        name: nameMap[assetId] || `Asset ${assetId}`,
+        assetType: typeMap[assetId] || null
       };
     }
   })
@@ -366,4 +392,3 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
     console.log("Server running");
 });
-
