@@ -177,73 +177,63 @@ try {
         const assets = outfitRes.data?.assets?.map(asset => asset.id) || [];
         console.log("OUTFIT RESPONSE ASSETS:", assets);
 
-        /* ASSET DETAILS MAPPER (Foolproof Direct Roblox Product Engine) */
-const assetDetails = await Promise.all(
-  assets.map(async (assetId) => {
-    try {
-      // 1. Fetch the asset picture link
-      const thumbRes = await axios.get(
-        `https://thumbnails.roblox.com/v1/assets?assetIds=${assetId}&size=420x420&format=Png`,
-        { headers: { "User-Agent": "Mozilla/5.0" } }
-      );
-      const imageUrl = thumbRes.data?.data?.[0]?.imageUrl || null;
+        /* ASSET DETAILS MAPPER (Bulk Unblockable Single-Ping Engine) */
+        let nameMap = {};
+        let typeMap = {};
 
-      // 2. Fetch the true product details (Unblockable Backup Route)
-      let realName = `Asset ${assetId}`;
-      let realType = null;
+        if (assets.length > 0) {
+            console.log("Bulk fetching asset names from Economy Multiget API...");
+            try {
+                // Format the assets array into the exact body structure Roblox expects
+                const assetIdsRequest = assets.map(id => parseInt(id));
 
-      try {
-        const detailsRes = await axios.get(
-          `https://economy.roblox.com/v2/assets/${assetId}/details`,
-          { headers: { "User-Agent": "Mozilla/5.0" } }
-        );
-        
-        // Check both capitalized 'Name' and lowercase 'name' variants returned by Roblox endpoints
-        if (detailsRes.data) {
-          realName = detailsRes.data.Name || detailsRes.data.name || realName;
-          
-          let typeId = detailsRes.data.AssetTypeId || detailsRes.data.assetTypeId || null;
-          if (typeId) {
-              const typeMap = { 
-                  8: "Hat", 41: "HairAccessory", 42: "FaceAccessory", 43: "NeckAccessory", 
-                  44: "ShoulderAccessory", 45: "FrontAccessory", 46: "BackAccessory", 
-                  47: "WaistAccessory", 11: "Shirt", 12: "Pants", 2: "TShirt", 17: "Head" 
-              };
-              realType = typeMap[typeId] || "Accessory";
-          }
-        }
-      } catch (detailsErr) {
-        // If economy blocks us, hit the direct unblockable marketplace fallback 
-        try {
-            const fallbackRes = await axios.get(
-              `https://economy.roblox.com/v2/assets/${assetId}/details`, 
-              { headers: { "User-Agent": "Mozilla/5.0" } }
-            );
-            if (fallbackRes.data) {
-                realName = fallbackRes.data.Name || fallbackRes.data.name || realName;
+                const bulkRes = await axios.post(
+                    "https://economy.roblox.com/v1/assets-details",
+                    { assetIds: assetIdsRequest },
+                    { headers: { "User-Agent": "Mozilla/5.0", "Content-Type": "application/json" } }
+                );
+
+                if (bulkRes.data && Array.isArray(bulkRes.data)) {
+                    bulkRes.data.forEach(item => {
+                        // Roblox returns capitalized object names from this endpoint
+                        nameMap[item.AssetId] = item.Name;
+                        
+                        // Capture the item types (Hat, Shirt, HairAccessory, etc.)
+                        typeMap[item.AssetId] = item.AssetTypeCode;
+                    });
+                }
+            } catch (bulkErr) {
+                console.log("ROBLOX BULK ENGINES BLOCKED:", bulkErr.message);
             }
-        } catch(e) {
-            console.log(`Completely blocked on item ${assetId}`);
         }
-      }
 
-      return {
-        id: assetId,
-        image: imageUrl,
-        name: realName,
-        assetType: realType
-      };
+        const assetDetails = await Promise.all(
+          assets.map(async (assetId) => {
+            try {
+              // Fetch item images normally (thumbnails API is fine with multiple requests)
+              const thumbRes = await axios.get(
+                `https://thumbnails.roblox.com/v1/assets?assetIds=${assetId}&size=420x420&format=Png`,
+                { headers: { "User-Agent": "Mozilla/5.0" } }
+              );
+              const imageUrl = thumbRes.data?.data?.[0]?.imageUrl || null;
 
-    } catch (err) {
-      return {
-        id: assetId,
-        image: null,
-        name: `Asset ${assetId}`,
-        assetType: null
-      };
-    }
-  })
-);
+              return {
+                id: assetId,
+                image: imageUrl,
+                name: nameMap[assetId] || `Asset ${assetId}`,
+                assetType: typeMap[assetId] || null
+              };
+
+            } catch (err) {
+              return {
+                id: assetId,
+                image: null,
+                name: nameMap[assetId] || `Asset ${assetId}`,
+                assetType: typeMap[assetId] || null
+              };
+            }
+          })
+        );
         
         
 res.json({
