@@ -177,72 +177,23 @@ try {
         const assets = outfitRes.data?.assets?.map(asset => asset.id) || [];
         console.log("OUTFIT RESPONSE ASSETS:", assets);
 
-        /* ASSET DETAILS MAPPER (The Ultimate Triple-Fallback Engine) */
-        const assetDetails = await Promise.all(
-          assets.map(async (assetId) => {
-            let realName = `Asset ${assetId}`;
-            let realType = null;
-            let imageUrl = null;
-
-            // 1. FETCH THUMBNAIL IMAGE (Always works)
-            try {
-              const thumbRes = await axios.get(
-                `https://thumbnails.roblox.com/v1/assets?assetIds=${assetId}&size=420x420&format=Png`,
-                { headers: { "User-Agent": "Mozilla/5.0" } }
-              );
-              imageUrl = thumbRes.data?.data?.[0]?.imageUrl || null;
-            } catch (e) {
-              console.log(`Thumbnail failed for ${assetId}`);
-            }
-
-            // 2. THE ULTIMATE TRIPLE NAME HUNT
-            try {
-              // --- ROUTE A: RoProxy Economy Details ---
-              const resA = await axios.get(
-                `https://economy.roproxy.com/v2/assets/${assetId}/details`,
-                { headers: { "User-Agent": "Mozilla/5.0" } }
-              );
-              if (resA.data && (resA.data.Name || resA.data.name)) {
-                realName = resA.data.Name || resA.data.name;
-                realType = resA.data.AssetClassName || resA.data.AssetTypeId || null;
-              }
-            } catch (errA) {
-              try {
-                // --- ROUTE B: Direct Core Item API ---
-                const resB = await axios.get(
-                  `https://catalog.roproxy.com/v1/catalog/items/details`,
-                  {
-                    method: "POST",
-                    data: { items: [{ itemType: "Asset", id: parseInt(assetId) }] },
-                    headers: { "User-Agent": "Mozilla/5.0", "Content-Type": "application/json" }
-                  }
-                );
-                if (resB.data?.data?.[0]) {
-                  realName = resB.data.data[0].name || realName;
-                  realType = resB.data.data[0].assetType || realType;
-                }
-              } catch (errB) {
-                try {
-                  // --- ROUTE C: Hidden Api.Roblox Legacy Proxy Pass ---
-                  const resC = await axios.get(
-                    `https://api.roproxy.com/marketplace/productinfo?assetId=${assetId}`,
-                    { headers: { "User-Agent": "Mozilla/5.0" } }
-                  );
-                  if (resC.data && resC.data.Name) {
-                    realName = resC.data.Name;
-                    realType = resC.data.AssetTypeCode || realType;
-                  }
-                } catch (errC) {
-                  console.log(`All 3 Roblox name routes blocked for asset: ${assetId}`);
-                }
-              }
-            }
-
-            // Clean up asset numbers into readable words for your frontend filter
+        // Clean up asset numbers into readable words for your frontend filter
             if (typeof realType === 'number') {
                 const typeMap = { 8: "Hat", 41: "HairAccessory", 42: "FaceAccessory", 11: "Shirt", 12: "Pants", 2: "TShirt", 17: "Head" };
                 realType = typeMap[realType] || "Accessory";
             }
+
+            // --- NEW BUNDLE LIMB AUTO-FIX ---
+            // If the APIs failed to find a name, guess it from the thumbnail folder link!
+            if (realName.startsWith("Asset ") && imageUrl) {
+                if (imageUrl.includes("LeftLeg")) { realName = "Left Leg"; realType = "BodyPart"; }
+                else if (imageUrl.includes("RightLeg")) { realName = "Right Leg"; realType = "BodyPart"; }
+                else if (imageUrl.includes("LeftArm")) { realName = "Left Arm"; realType = "BodyPart"; }
+                else if (imageUrl.includes("RightArm")) { realName = "Right Arm"; realType = "BodyPart"; }
+                else if (imageUrl.includes("Torso")) { realName = "Torso"; realType = "BodyPart"; }
+                else if (imageUrl.includes("DynamicHead")) { realName = "Animated Head"; realType = "Head"; }
+            }
+            // --- END OF AUTO-FIX ---
 
             return {
               id: assetId,
@@ -250,9 +201,6 @@ try {
               name: realName,
               assetType: realType
             };
-          })
-        );
-        
         
 res.json({
 
