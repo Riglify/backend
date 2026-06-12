@@ -90,82 +90,75 @@ app.get("/avatar/:username", async(req,res)=>{
         let userId;
         let user;
 
-/* IF INPUT IS USER ID */
+        /* IF INPUT IS USER ID */
+        if(/^\d+$/.test(input)){
 
-if(/^\d+$/.test(input)){
+            userId = input;
 
-    userId = input;
+            const userInfo = await axios.get(
+                `https://users.roblox.com/v1/users/${userId}`
+            );
 
-    const userInfo = await axios.get(
-        `https://users.roblox.com/v1/users/${userId}`
-    );
+            user = userInfo.data;
 
-    user = userInfo.data;
+        }else{
 
-}else{
+            /* Username lookup */
+            const userRes = await axios.post(
+              "https://users.roblox.com/v1/usernames/users",
+              {
+                usernames: [input],
+                excludeBannedUsers: false
+              }
+            );
 
-    /* Username lookup */
-    const userRes = await axios.post(
-      "https://users.roblox.com/v1/usernames/users",
-      {
-        usernames: [input],
-        excludeBannedUsers: false
-      }
-    );
+            if(!userRes.data.data.length){
 
-    if(!userRes.data.data.length){
+                return res.status(404).json({
+                    error:"User not found"
+                });
 
-        return res.status(404).json({
-            error:"User not found"
-        });
+            }
 
-    }
+            user = userRes.data.data[0];
+            userId = user.id;
 
-    user = userRes.data.data[0];
-userId = user.id;
+            console.log("Found user:", user);
+            console.log("User ID:", userId);
 
-console.log("Found user:", user);
-console.log("User ID:", userId);
-
-}
+        }
 
         /* AVATAR THUMBNAIL */
-console.log("Fetching thumbnail...");
+        console.log("Fetching thumbnail...");
         
         const thumbRes = await axios.get(
-  `https://thumbnails.roblox.com/v1/users/avatar?userIds=${userId}&size=720x720&format=Png&isCircular=false`,
-  {
-    headers: { "User-Agent": "Mozilla/5.0" }
-  }
-);
+          `https://thumbnails.roblox.com/v1/users/avatar?userIds=${userId}&size=720x720&format=Png&isCircular=false`,
+          {
+            headers: { "User-Agent": "Mozilla/5.0" }
+          }
+        );
         const thumbUrl = thumbRes.data?.data?.[0]?.imageUrl || null;
 
-            /* 3D THUMBNAIL */
-let thumb3dUrl = null;
+        /* 3D THUMBNAIL */
+        let thumb3dUrl = null;
 
-console.log("Fetching 3D thumbnail...");
+        console.log("Fetching 3D thumbnail...");
 
-try {
+        try {
 
-    const thumb3dRes = await axios.get(
-        `https://thumbnails.roblox.com/v1/users/avatar-3d?userIds=${userId}`,
-        {
-            headers: { "User-Agent": "Mozilla/5.0" }
+            const thumb3dRes = await axios.get(
+                `https://thumbnails.roblox.com/v1/users/avatar-3d?userIds=${userId}`,
+                {
+                    headers: { "User-Agent": "Mozilla/5.0" }
+                }
+            );
+
+            thumb3dUrl = thumb3dRes.data?.data?.[0]?.imageUrl || null;
+            console.log("3D thumbnail success");
+
+        } catch(err) {
+            console.log("3D THUMBNAIL FAILED");
         }
-    );
-
-    thumb3dUrl =
-        thumb3dRes.data?.data?.[0]?.imageUrl || null;
-
-    console.log("3D thumbnail success");
-
-} catch(err) {
-
-    console.log("3D THUMBNAIL FAILED");
-    console.log(err.response?.status);
-    console.log(err.response?.data);
-
-}
 
         /* AVATAR DETAILS */
         console.log("Fetching avatar details...");
@@ -177,14 +170,71 @@ try {
         const assets = outfitRes.data?.assets?.map(asset => asset.id) || [];
         console.log("OUTFIT RESPONSE ASSETS:", assets);
 
-        // Clean up asset numbers into readable words for your frontend filter
+        /* ASSET DETAILS MAPPER (The Ultimate Triple-Fallback Engine) */
+        const assetDetails = await Promise.all(
+          assets.map(async (assetId) => {
+            let realName = `Asset ${assetId}`;
+            let realType = null;
+            let imageUrl = null;
+
+            // 1. FETCH THUMBNAIL IMAGE
+            try {
+              const thumbRes = await axios.get(
+                `https://thumbnails.roblox.com/v1/assets?assetIds=${assetId}&size=420x420&format=Png`,
+                { headers: { "User-Agent": "Mozilla/5.0" } }
+              );
+              imageUrl = thumbRes.data?.data?.[0]?.imageUrl || null;
+            } catch (e) {
+              console.log(`Thumbnail failed for ${assetId}`);
+            }
+
+            // 2. THE ULTIMATE TRIPLE NAME HUNT
+            try {
+              // --- ROUTE A: RoProxy Economy Details ---
+              const resA = await axios.get(
+                `https://economy.roproxy.com/v2/assets/${assetId}/details`,
+                { headers: { "User-Agent": "Mozilla/5.0" } }
+              );
+              if (resA.data && (resA.data.Name || resA.data.name)) {
+                realName = resA.data.Name || resA.data.name;
+                realType = resA.data.AssetClassName || resA.data.AssetTypeId || null;
+              }
+            } catch (errA) {
+              try {
+                // --- ROUTE B: Direct Core Item API ---
+                const resB = await axios.post(
+                  `https://catalog.roproxy.com/v1/catalog/items/details`,
+                  { items: [{ itemType: "Asset", id: parseInt(assetId) }] },
+                  { headers: { "User-Agent": "Mozilla/5.0", "Content-Type": "application/json" } }
+                );
+                if (resB.data?.data?.[0]) {
+                  realName = resB.data.data[0].name || realName;
+                  realType = resB.data.data[0].assetType || realType;
+                }
+              } catch (errB) {
+                try {
+                  // --- ROUTE C: Hidden Api.Roblox Legacy Proxy Pass ---
+                  const resC = await axios.get(
+                    `https://api.roproxy.com/marketplace/productinfo?assetId=${assetId}`,
+                    { headers: { "User-Agent": "Mozilla/5.0" } }
+                  );
+                  if (resC.data && resC.data.Name) {
+                    realName = resC.data.Name;
+                    realType = resC.data.AssetTypeCode || realType;
+                  }
+                } catch (errC) {
+                  console.log(`All 3 Roblox name routes blocked for asset: ${assetId}`);
+                }
+              }
+            }
+
+            // Clean up asset numbers into readable words
             if (typeof realType === 'number') {
                 const typeMap = { 8: "Hat", 41: "HairAccessory", 42: "FaceAccessory", 11: "Shirt", 12: "Pants", 2: "TShirt", 17: "Head" };
                 realType = typeMap[realType] || "Accessory";
             }
 
-            // --- NEW BUNDLE LIMB AUTO-FIX ---
-            // If the APIs failed to find a name, guess it from the thumbnail folder link!
+            // --- BUNDLE LIMB AUTO-FIX ---
             if (realName.startsWith("Asset ") && imageUrl) {
                 if (imageUrl.includes("LeftLeg")) { realName = "Left Leg"; realType = "BodyPart"; }
                 else if (imageUrl.includes("RightLeg")) { realName = "Right Leg"; realType = "BodyPart"; }
@@ -193,7 +243,6 @@ try {
                 else if (imageUrl.includes("Torso")) { realName = "Torso"; realType = "BodyPart"; }
                 else if (imageUrl.includes("DynamicHead")) { realName = "Animated Head"; realType = "Head"; }
             }
-            // --- END OF AUTO-FIX ---
 
             return {
               id: assetId,
@@ -201,37 +250,32 @@ try {
               name: realName,
               assetType: realType
             };
+          })
+        );
         
-res.json({
+        // Send successful JSON payload back
+        res.json({
+            success: true,
+            username: user.name,
+            displayName: user.displayName,
+            userId: userId,
+            thumbnail: thumbUrl,
+            thumbnail3d: thumb3dUrl,
+            assets: assetDetails
+        });
 
-    success:true,
+    }catch(err){
 
-    username:user.name,
+        console.log("FULL ERROR:");
+        console.log(err.response?.data);
+        console.log(err.response?.status);
+        console.log(err.message);
 
-    displayName:user.displayName,
+        res.status(500).json({
+            error:"Failed to fetch avatar"
+        });
 
-    userId:userId,
-
-thumbnail: thumbUrl,
-thumbnail3d: thumb3dUrl,
-
-    assets:assetDetails
-
-    
-});
-
-}catch(err){
-
-    console.log("FULL ERROR:");
-    console.log(err.response?.data);
-    console.log(err.response?.status);
-    console.log(err.message);
-
-    res.status(500).json({
-        error:"Failed to fetch avatar"
-    });
-
-}
+    }
 
 });
     
