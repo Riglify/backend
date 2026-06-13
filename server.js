@@ -283,6 +283,10 @@ app.get("/avatar/:username", async(req,res)=>{
    RIGLIFY DOWNLOAD SYSTEM - REFACTORED CODE 
    ========================================================================== */
 
+/* ==========================================================================
+   RIGLIFY DOWNLOAD SYSTEM - FULLY ARMORED 3D MESH STREAM ROUTE
+   ========================================================================== */
+
 app.get('/download/:id', async (req, res) => {
     const assetId = req.params.id;
 
@@ -290,41 +294,59 @@ app.get('/download/:id', async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET');
 
-    // 2. Handle the 3D Preview File Type properly
-    if (assetId === 'all_glb') {
-        res.setHeader('Content-Type', 'model/gltf-binary');
-        // Clean attachment tag that Chrome won't reject
-        res.setHeader('Content-Disposition', 'inline; filename="avatar.glb"');
-    } else if (assetId.includes('_')) {
-        res.setHeader('Content-Type', 'application/octet-stream');
-        res.setHeader('Content-Disposition', `attachment; filename="${assetId}"`);
-    } else {
-        res.setHeader('Content-Type', 'application/octet-stream');
-        res.setHeader('Content-Disposition', `attachment; filename="asset_${assetId}.rbxm"`);
-    }
-
     try {
-        // --- YOUR AVATAR/ASSET FETCHING LOGIC HERE ---
-        // Example: const assetRes = await axios.get(robloxUrl, { responseType: 'stream' });
-        
-        // Make sure you are piping the stream and RETURN immediately so it never runs extra response codes!
-        if (typeof assetRes !== 'undefined' && assetRes.data) {
+        // 2. HANDLE THE 3D PREVIEW ENGINE CALL
+        if (assetId === 'all_glb') {
+            res.setHeader('Content-Type', 'model/gltf-binary');
+            res.setHeader('Content-Disposition', 'inline; filename="avatar.glb"');
+
+            // Hardcoded test user ID or fallback asset sequence if a dynamic lookup isn't passed yet
+            // If you want this to change per player, we can pass the userId as a query parameter later!
+            const testUserId = 1; 
+
+            // Fetch the live 3D metadata packet configuration from Roblox
+            const thumb3dRes = await axios.get(
+                `https://thumbnails.roblox.com/v1/users/avatar-3d?userIds=${testUserId}`,
+                { headers: { "User-Agent": "Mozilla/5.0" } }
+            );
+
+            const roblox3dUrl = thumb3dRes.data?.data?.[0]?.imageUrl;
+
+            if (!roblox3dUrl) {
+                res.setHeader('Content-Type', 'text/plain');
+                return res.status(404).send("Roblox 3D preview asset generation profile not found.");
+            }
+
+            // Stream the actual raw Roblox OBJ/GLTF coordinate assembly data directly back to the canvas
+            const assetRes = await axios.get(roblox3dUrl, { responseType: 'stream' });
             return assetRes.data.pipe(res);
-        } else {
-            // If your asset generator variable is different, make sure it pipes here safely.
-            // For example, if you generate the GLB locally:
-            // return res.send(generatedGlbBuffer);
-            
-            // Fallback if asset data isn't found to prevent ERR_INVALID_RESPONSE
-            return res.status(404).send("Asset file data stream empty.");
         }
+
+        // 3. HANDLE REGULAR STATIC ASSET DOWNLOAD OVERRIDES
+        if (assetId.includes('_')) {
+            res.setHeader('Content-Type', 'application/octet-stream');
+            res.setHeader('Content-Disposition', `attachment; filename="${assetId}"`);
+        } else {
+            res.setHeader('Content-Type', 'application/octet-stream');
+            res.setHeader('Content-Disposition', `attachment; filename="asset_${assetId}.rbxm"`);
+        }
+
+        // Fetching structural items layout logic from Roblox asset deployment core endpoints
+        const robloxAssetUrl = `https://assetdelivery.roblox.com/v1/asset/?id=${assetId}`;
+        const assetRes = await axios.get(robloxAssetUrl, { 
+            responseType: 'stream',
+            headers: { "User-Agent": "Mozilla/5.0" }
+        });
+        
+        return assetRes.data.pipe(res);
 
     } catch (err) {
         console.error("Backend Download Engine Error:", err.message);
         
-        // Check if headers were already sent to prevent crashing the server response channel
+        // Safety lock: if a network crash happens, clean up content-type headers so Chrome gets a readable text message
         if (!res.headersSent) {
-            return res.status(500).send("Failed to process asset stream down link.");
+            res.setHeader('Content-Type', 'text/plain');
+            return res.status(500).send(`Failed to process asset stream link: ${err.message}`);
         }
     }
 });
