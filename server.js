@@ -286,23 +286,46 @@ app.get("/avatar/:username", async(req,res)=>{
 app.get('/download/:id', async (req, res) => {
     const assetId = req.params.id;
 
-    // Manually allow your website to read the files without the cors package!
-    res.setHeader('Access-Control-Allow-Origin', '*'); 
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST');
+    // 1. Set clean CORS headers instantly so Chrome doesn't freak out
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET');
+
+    // 2. Handle the 3D Preview File Type properly
+    if (assetId === 'all_glb') {
+        res.setHeader('Content-Type', 'model/gltf-binary');
+        // Clean attachment tag that Chrome won't reject
+        res.setHeader('Content-Disposition', 'inline; filename="avatar.glb"');
+    } else if (assetId.includes('_')) {
+        res.setHeader('Content-Type', 'application/octet-stream');
+        res.setHeader('Content-Disposition', `attachment; filename="${assetId}"`);
+    } else {
+        res.setHeader('Content-Type', 'application/octet-stream');
+        res.setHeader('Content-Disposition', `attachment; filename="asset_${assetId}.rbxm"`);
+    }
 
     try {
-        // Set the attachment header so the browser downloads it as a file
-        res.setHeader(
-            "Content-Disposition",
-            `attachment; filename="asset_${assetId}"`
-        );
-
-        // Pipe the backend data stream directly to the response
-        assetRes.data.pipe(res);
+        // --- YOUR AVATAR/ASSET FETCHING LOGIC HERE ---
+        // Example: const assetRes = await axios.get(robloxUrl, { responseType: 'stream' });
+        
+        // Make sure you are piping the stream and RETURN immediately so it never runs extra response codes!
+        if (typeof assetRes !== 'undefined' && assetRes.data) {
+            return assetRes.data.pipe(res);
+        } else {
+            // If your asset generator variable is different, make sure it pipes here safely.
+            // For example, if you generate the GLB locally:
+            // return res.send(generatedGlbBuffer);
+            
+            // Fallback if asset data isn't found to prevent ERR_INVALID_RESPONSE
+            return res.status(404).send("Asset file data stream empty.");
+        }
 
     } catch (err) {
-        console.log(err.response?.data || err.message);
-        res.status(500).send("Failed to download asset.");
+        console.error("Backend Download Engine Error:", err.message);
+        
+        // Check if headers were already sent to prevent crashing the server response channel
+        if (!res.headersSent) {
+            return res.status(500).send("Failed to process asset stream down link.");
+        }
     }
 });
 
