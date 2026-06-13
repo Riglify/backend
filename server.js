@@ -292,7 +292,7 @@ app.get("/avatar/:username", async(req,res)=>{
    ========================================================================== */
 
 /* ==========================================================================
-   RIGLIFY DOWNLOAD SYSTEM - AUTO-TEXTURE MATCHING ENGINE
+   RIGLIFY DOWNLOAD SYSTEM - FIREWALL BYPASS EXTENSION
    ========================================================================== */
 
 app.get('/download/:id', async (req, res) => {
@@ -309,7 +309,6 @@ app.get('/download/:id', async (req, res) => {
 
             const targetUserId = req.query.userId || 2012; 
 
-            // Fetch the 3D model tracking registry data sheet from RoProxy
             const thumb3dRes = await axios.get(
                 `https://thumbnails.roproxy.com/v1/users/avatar-3d?userIds=${targetUserId}`,
                 { headers: { "User-Agent": "Mozilla/5.0" } }
@@ -322,42 +321,56 @@ app.get('/download/:id', async (req, res) => {
                 return res.status(404).send("Roblox 3D preview asset generation profile not found.");
             }
 
-            // Fetch the raw scene data file string from Roblox's CDN secure bucket
             const modelDataRes = await axios.get(roblox3dUrl, { responseType: 'text' });
             let rawModelText = modelDataRes.data;
 
-            // Find all hidden asset image texture links inside the file data 
-            // and rewrite them to route cleanly back through your own server
             const robloxImageRegex = /https:\/\/images\.roblox\.com\/asset\/\?id=(\d+)/g;
             
             let fixedModelText = rawModelText.replace(robloxImageRegex, (match, imageAssetId) => {
-                return `https://riglify.onrender.com/download/${imageAssetId}`;
+                return `https://riglify.onrender.com/download/${imageAssetId}?isTexture=true`;
             });
 
-            // Send the completely unlocked, beautifully textured model layout to Chrome
             return res.send(fixedModelText);
         }
 
-        // 2. PUBLIC ITEM DOWNLOAD OVERRIDES (.RBXM & ASSET TEXTURES)
-        res.setHeader('Content-Type', 'application/octet-stream');
-        if (assetId.includes('_')) {
-            res.setHeader('Content-Disposition', `attachment; filename="${assetId}"`);
-        } else {
-            res.setHeader('Content-Disposition', `attachment; filename="asset_${assetId}.rbxm"`);
-        }
+        // 2. CHECK IF THIS REQUEST IS A IMAGE TEXTURE OR A MODEL ELEMENT (.RBXM)
+        const isTextureRequest = req.query.isTexture === 'true';
 
-        // Use the open catalog distribution pipeline layout to fetch assets safely
-        const catalogDownloadUrl = `https://assetdelivery.roproxy.com/v1/asset/?id=${assetId}`;
-        
-        const assetRes = await axios.get(catalogDownloadUrl, { 
-            responseType: 'stream',
-            headers: { 
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"
+        if (isTextureRequest) {
+            // Force browser to handle this as a clean PNG data stream
+            res.setHeader('Content-Type', 'image/png');
+            res.setHeader('Content-Disposition', `inline; filename="texture_${assetId}.png"`);
+
+            // Use the wide open public asset endpoint that never throws 403s for textures!
+            const textureUrl = `https://assetdelivery.roproxy.com/v1/asset/?id=${assetId}`;
+            
+            const assetRes = await axios.get(textureUrl, { 
+                responseType: 'stream',
+                headers: { "User-Agent": "Mozilla/5.0" }
+            });
+            return assetRes.data.pipe(res);
+
+        } else {
+            // Standard individual static asset download override (.RBXM)
+            res.setHeader('Content-Type', 'application/octet-stream');
+            if (assetId.includes('_')) {
+                res.setHeader('Content-Disposition', `attachment; filename="${assetId}"`);
+            } else {
+                res.setHeader('Content-Disposition', `attachment; filename="asset_${assetId}.rbxm"`);
             }
-        });
-        
-        return assetRes.data.pipe(res);
+
+            const catalogDownloadUrl = `https://assetdelivery.roproxy.com/v1/asset/?id=${assetId}`;
+            
+            const assetRes = await axios.get(catalogDownloadUrl, { 
+                responseType: 'stream',
+                headers: { 
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"
+                }
+            });
+            
+            return assetRes.data.pipe(res);
+        }
 
     } catch (err) {
         console.error("Backend Download Engine Error:", err.message);
