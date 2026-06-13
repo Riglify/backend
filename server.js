@@ -291,6 +291,10 @@ app.get("/avatar/:username", async(req,res)=>{
    RIGLIFY DOWNLOAD SYSTEM - COMPATIBLE BACKEND ROUTE
    ========================================================================== */
 
+/* ==========================================================================
+   RIGLIFY DOWNLOAD SYSTEM - AUTO-TEXTURE MATCHING ENGINE
+   ========================================================================== */
+
 app.get('/download/:id', async (req, res) => {
     const assetId = req.params.id;
 
@@ -298,23 +302,43 @@ app.get('/download/:id', async (req, res) => {
     res.setHeader('Access-Control-Allow-Methods', 'GET');
 
     try {
-        // 1. CHROME 3D PREVIEW CHANNEL
+        // 1. CHROME 3D PREVIEW CHANNEL (AUTO-TEXTURE PACKER)
         if (assetId === 'all_glb') {
             res.setHeader('Content-Type', 'model/gltf-binary');
             res.setHeader('Content-Disposition', 'inline; filename="avatar.glb"');
 
-            // Quick fix fallback model stream so the frontend panel stops throwing errors
-            // This pulls a verified public asset that bypasses the 403 restriction channel
-            const workingAssetModelUrl = "https://assetdelivery.roproxy.com/v1/asset/?id=60791940";
+            const targetUserId = req.query.userId || 2012; 
+
+            // Fetch the 3D model tracking registry data sheet from RoProxy
+            const thumb3dRes = await axios.get(
+                `https://thumbnails.roproxy.com/v1/users/avatar-3d?userIds=${targetUserId}`,
+                { headers: { "User-Agent": "Mozilla/5.0" } }
+            );
+
+            const roblox3dUrl = thumb3dRes.data?.data?.[0]?.imageUrl;
+
+            if (!roblox3dUrl) {
+                res.setHeader('Content-Type', 'text/plain');
+                return res.status(404).send("Roblox 3D preview asset generation profile not found.");
+            }
+
+            // Fetch the raw scene data file string from Roblox's CDN secure bucket
+            const modelDataRes = await axios.get(roblox3dUrl, { responseType: 'text' });
+            let rawModelText = modelDataRes.data;
+
+            // Find all hidden asset image texture links inside the file data 
+            // and rewrite them to route cleanly back through your own server
+            const robloxImageRegex = /https:\/\/images\.roblox\.com\/asset\/\?id=(\d+)/g;
             
-            const assetRes = await axios.get(workingAssetModelUrl, { 
-                responseType: 'stream',
-                headers: { "User-Agent": "Mozilla/5.0" }
+            let fixedModelText = rawModelText.replace(robloxImageRegex, (match, imageAssetId) => {
+                return `https://riglify.onrender.com/download/${imageAssetId}`;
             });
-            return assetRes.data.pipe(res);
+
+            // Send the completely unlocked, beautifully textured model layout to Chrome
+            return res.send(fixedModelText);
         }
 
-        // 2. PUBLIC ITEM DOWNLOAD OVERRIDES (.RBXM)
+        // 2. PUBLIC ITEM DOWNLOAD OVERRIDES (.RBXM & ASSET TEXTURES)
         res.setHeader('Content-Type', 'application/octet-stream');
         if (assetId.includes('_')) {
             res.setHeader('Content-Disposition', `attachment; filename="${assetId}"`);
@@ -322,7 +346,7 @@ app.get('/download/:id', async (req, res) => {
             res.setHeader('Content-Disposition', `attachment; filename="asset_${assetId}.rbxm"`);
         }
 
-        // Use the public marketplace catalog API link layout - it doesn't require security access cookies!
+        // Use the open catalog distribution pipeline layout to fetch assets safely
         const catalogDownloadUrl = `https://assetdelivery.roproxy.com/v1/asset/?id=${assetId}`;
         
         const assetRes = await axios.get(catalogDownloadUrl, { 
