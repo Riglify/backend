@@ -284,7 +284,7 @@ app.get("/avatar/:username", async(req,res)=>{
    ========================================================================== */
 
 /* ==========================================================================
-   RIGLIFY DOWNLOAD SYSTEM - FULLY ARMORED 3D MESH STREAM ROUTE
+   RIGLIFY DOWNLOAD SYSTEM - FULLY PROXIED 3D MESH STREAM ROUTE
    ========================================================================== */
 
 app.get('/download/:id', async (req, res) => {
@@ -295,18 +295,17 @@ app.get('/download/:id', async (req, res) => {
     res.setHeader('Access-Control-Allow-Methods', 'GET');
 
     try {
-        // 2. HANDLE THE 3D PREVIEW ENGINE CALL
+        // 2. HANDLE THE 3D PREVIEW ENGINE CALL (ROPROXY ARMORED)
         if (assetId === 'all_glb') {
             res.setHeader('Content-Type', 'model/gltf-binary');
             res.setHeader('Content-Disposition', 'inline; filename="avatar.glb"');
 
-            // Hardcoded test user ID or fallback asset sequence if a dynamic lookup isn't passed yet
-            // If you want this to change per player, we can pass the userId as a query parameter later!
-            const testUserId = 1; 
+            // Grab the dynamic userId sent from the frontend query string, fallback to a known working ID if blank
+            const targetUserId = req.query.userId || 2012; 
 
-            // Fetch the live 3D metadata packet configuration from Roblox
+            // Route through roproxy to smash through the 403 firewall block
             const thumb3dRes = await axios.get(
-                `https://thumbnails.roblox.com/v1/users/avatar-3d?userIds=${testUserId}`,
+                `https://thumbnails.roproxy.com/v1/users/avatar-3d?userIds=${targetUserId}`,
                 { headers: { "User-Agent": "Mozilla/5.0" } }
             );
 
@@ -317,22 +316,21 @@ app.get('/download/:id', async (req, res) => {
                 return res.status(404).send("Roblox 3D preview asset generation profile not found.");
             }
 
-            // Stream the actual raw Roblox OBJ/GLTF coordinate assembly data directly back to the canvas
+            // Stream the actual 3D coordinate asset directly back to your model-viewer canvas
             const assetRes = await axios.get(roblox3dUrl, { responseType: 'stream' });
             return assetRes.data.pipe(res);
         }
 
-        // 3. HANDLE REGULAR STATIC ASSET DOWNLOAD OVERRIDES
+        // 3. HANDLE REGULAR STATIC ASSET DOWNLOAD OVERRIDES (.RBXM)
+        res.setHeader('Content-Type', 'application/octet-stream');
         if (assetId.includes('_')) {
-            res.setHeader('Content-Type', 'application/octet-stream');
             res.setHeader('Content-Disposition', `attachment; filename="${assetId}"`);
         } else {
-            res.setHeader('Content-Type', 'application/octet-stream');
             res.setHeader('Content-Disposition', `attachment; filename="asset_${assetId}.rbxm"`);
         }
 
-        // Fetching structural items layout logic from Roblox asset deployment core endpoints
-        const robloxAssetUrl = `https://assetdelivery.roblox.com/v1/asset/?id=${assetId}`;
+        // Route asset downloads through roproxy to prevent random 403 download drops
+        const robloxAssetUrl = `https://assetdelivery.roproxy.com/v1/asset/?id=${assetId}`;
         const assetRes = await axios.get(robloxAssetUrl, { 
             responseType: 'stream',
             headers: { "User-Agent": "Mozilla/5.0" }
@@ -343,7 +341,6 @@ app.get('/download/:id', async (req, res) => {
     } catch (err) {
         console.error("Backend Download Engine Error:", err.message);
         
-        // Safety lock: if a network crash happens, clean up content-type headers so Chrome gets a readable text message
         if (!res.headersSent) {
             res.setHeader('Content-Type', 'text/plain');
             return res.status(500).send(`Failed to process asset stream link: ${err.message}`);
