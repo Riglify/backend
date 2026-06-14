@@ -292,92 +292,83 @@ app.get("/avatar/:username", async(req,res)=>{
    ========================================================================== */
 
 /* ==========================================================================
-   RIGLIFY DOWNLOAD SYSTEM - FIREWALL BYPASS EXTENSION
+   RIGLIFY DOWNLOAD SYSTEM - MULTI-FORMAT & TEXTURE ENGINE
    ========================================================================== */
 
 app.get('/download/:id', async (req, res) => {
     const assetId = req.params.id;
+    // Grab userId from the URL query (e.g., ?userId=12345)
+    const targetUserId = req.query.userId || 2012; 
 
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET');
 
     try {
-        // 1. CHROME 3D PREVIEW CHANNEL (AUTO-TEXTURE PACKER)
-        if (assetId === 'all_glb') {
-            res.setHeader('Content-Type', 'model/gltf-binary');
-            res.setHeader('Content-Disposition', 'inline; filename="avatar.glb"');
+        // 1. HANDLE FULL AVATAR EXPORTS (GLB, OBJ, RBXM)
+        if (assetId.startsWith('all_')) {
+            const format = assetId.split('_')[1]; // gets 'glb', 'obj', or 'rbxm'
+            
+            // Set correct headers based on format
+            if (format === 'glb') res.setHeader('Content-Type', 'model/gltf-binary');
+            else if (format === 'obj') res.setHeader('Content-Type', 'text/plain');
+            else res.setHeader('Content-Type', 'application/octet-stream');
 
-            const targetUserId = req.query.userId || 2012; 
+            res.setHeader('Content-Disposition', `inline; filename="avatar.${format}"`);
 
+            // Fetch 3D metadata
             const thumb3dRes = await axios.get(
                 `https://thumbnails.roproxy.com/v1/users/avatar-3d?userIds=${targetUserId}`,
                 { headers: { "User-Agent": "Mozilla/5.0" } }
             );
 
             const roblox3dUrl = thumb3dRes.data?.data?.[0]?.imageUrl;
+            if (!roblox3dUrl) return res.status(404).send("3D profile not found.");
 
-            if (!roblox3dUrl) {
-                res.setHeader('Content-Type', 'text/plain');
-                return res.status(404).send("Roblox 3D preview asset generation profile not found.");
-            }
-
+            // Fetch raw data and rewrite texture links to bypass 403s
             const modelDataRes = await axios.get(roblox3dUrl, { responseType: 'text' });
             let rawModelText = modelDataRes.data;
 
             const robloxImageRegex = /https:\/\/images\.roblox\.com\/asset\/\?id=(\d+)/g;
-            
-            let fixedModelText = rawModelText.replace(robloxImageRegex, (match, imageAssetId) => {
-                return `https://riglify.onrender.com/download/${imageAssetId}?isTexture=true`;
+            let fixedModelText = rawModelText.replace(robloxImageRegex, (match, imgId) => {
+                return `https://riglify.onrender.com/download/${imgId}?isTexture=true`;
             });
 
             return res.send(fixedModelText);
         }
 
-        // 2. CHECK IF THIS REQUEST IS A IMAGE TEXTURE OR A MODEL ELEMENT (.RBXM)
-        const isTextureRequest = req.query.isTexture === 'true';
-
-        if (isTextureRequest) {
-            // Force browser to handle this as a clean PNG data stream
+        // 2. HANDLE TEXTURE REQUESTS (The 403 Fix)
+        if (req.query.isTexture === 'true') {
             res.setHeader('Content-Type', 'image/png');
-            res.setHeader('Content-Disposition', `inline; filename="texture_${assetId}.png"`);
-
-            // Use the wide open public asset endpoint that never throws 403s for textures!
-            const textureUrl = `https://assetdelivery.roproxy.com/v1/asset/?id=${assetId}`;
             
-            const assetRes = await axios.get(textureUrl, { 
-                responseType: 'stream',
-                headers: { "User-Agent": "Mozilla/5.0" }
-            });
-            return assetRes.data.pipe(res);
+            // Get the public thumbnail URL which doesn't 403
+            const thumbMapRes = await axios.get(
+                `https://thumbnails.roproxy.com/v1/assets?assetIds=${assetId}&size=420x420&format=Png`,
+                { headers: { "User-Agent": "Mozilla/5.0" } }
+            );
 
-        } else {
-            // Standard individual static asset download override (.RBXM)
-            res.setHeader('Content-Type', 'application/octet-stream');
-            if (assetId.includes('_')) {
-                res.setHeader('Content-Disposition', `attachment; filename="${assetId}"`);
-            } else {
-                res.setHeader('Content-Disposition', `attachment; filename="asset_${assetId}.rbxm"`);
-            }
+            const directImageUrl = thumbMapRes.data?.data?.[0]?.imageUrl;
+            if (!directImageUrl) throw new Error("Texture not found in public CDN");
 
-            const catalogDownloadUrl = `https://assetdelivery.roproxy.com/v1/asset/?id=${assetId}`;
-            
-            const assetRes = await axios.get(catalogDownloadUrl, { 
-                responseType: 'stream',
-                headers: { 
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"
-                }
-            });
-            
+            const assetRes = await axios.get(directImageUrl, { responseType: 'stream' });
             return assetRes.data.pipe(res);
         }
 
+        // 3. STANDARD INDIVIDUAL ITEM DOWNLOADS
+        res.setHeader('Content-Type', 'application/octet-stream');
+        res.setHeader('Content-Disposition', `attachment; filename="asset_${assetId}.rbxm"`);
+
+        const catalogDownloadUrl = `https://assetdelivery.roproxy.com/v1/asset/?id=${assetId}`;
+        const assetRes = await axios.get(catalogDownloadUrl, { 
+            responseType: 'stream',
+            headers: { "User-Agent": "Mozilla/5.0" }
+        });
+        return assetRes.data.pipe(res);
+
     } catch (err) {
-        console.error("Backend Download Engine Error:", err.message);
-        
+        console.error("Download Error:", err.message);
         if (!res.headersSent) {
             res.setHeader('Content-Type', 'text/plain');
-            return res.status(500).send(`Download channel offline for this item: ${err.message}`);
+            return res.status(500).send(`Error: ${err.message}`);
         }
     }
 });
