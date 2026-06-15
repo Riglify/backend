@@ -325,7 +325,17 @@ app.get('/download/:id', async (req, res) => {
             if (!roblox3dUrl) return res.status(404).send("3D profile not found.");
 
             // Fetch raw data and rewrite texture links to bypass 403s
-            const modelDataRes = await axios.get(roblox3dUrl, { responseType: 'text' });
+            console.log("3D URL:", roblox3dUrl);
+
+const modelDataRes = await axios.get(
+    roblox3dUrl,
+    {
+        responseType: 'text',
+        headers: {
+            "User-Agent": "Mozilla/5.0"
+        }
+    }
+);
             let rawModelText = modelDataRes.data;
 
             const robloxImageRegex = /https:\/\/images\.roblox\.com\/asset\/\?id=(\d+)/g;
@@ -350,6 +360,8 @@ app.get('/download/:id', async (req, res) => {
             if (!directImageUrl) throw new Error("Texture not found in public CDN");
 
             const assetRes = await axios.get(directImageUrl, { responseType: 'stream' });
+            console.log("Downloading asset:", assetId);
+console.log("Texture URL:", directImageUrl);
             return assetRes.data.pipe(res);
         }
 
@@ -358,10 +370,15 @@ app.get('/download/:id', async (req, res) => {
         res.setHeader('Content-Disposition', `attachment; filename="asset_${assetId}.rbxm"`);
 
         const catalogDownloadUrl = `https://assetdelivery.roproxy.com/v1/asset/?id=${assetId}`;
-        const assetRes = await axios.get(catalogDownloadUrl, { 
-            responseType: 'stream',
-            headers: { "User-Agent": "Mozilla/5.0" }
-        });
+        console.log("Downloading asset:", assetId);
+console.log("Texture URL:", directImageUrl);
+
+const assetRes = await axios.get(catalogDownloadUrl, {
+    responseType: 'stream',
+    headers: {
+        "User-Agent": "Mozilla/5.0"
+    }
+});
         return assetRes.data.pipe(res);
 
     } catch (err) {
