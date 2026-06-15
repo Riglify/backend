@@ -382,12 +382,17 @@ const assetRes = await axios.get(catalogDownloadUrl, {
         return assetRes.data.pipe(res);
 
     } catch (err) {
-        console.error("Download Error:", err.message);
-        if (!res.headersSent) {
-            res.setHeader('Content-Type', 'text/plain');
-            return res.status(500).send(`Error: ${err.message}`);
-        }
+    console.error("========== DOWNLOAD FAILURE ==========");
+    console.error("Message:", err.message);
+    console.error("Status:", err.response?.status);
+    console.error("URL:", err.config?.url);
+    console.error("Response:", err.response?.data);
+    console.error("=====================================");
+
+    if (!res.headersSent) {
+        return res.status(500).send(err.message);
     }
+}
 });
 
 /* GITHUB LOGIN */
