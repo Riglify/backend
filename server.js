@@ -305,46 +305,11 @@ app.get('/download/:id', async (req, res) => {
 
     try {
         // 1. HANDLE FULL AVATAR EXPORTS (GLB, OBJ, RBXM)
-        if (assetId.startsWith('all_')) {
-            const format = assetId.split('_')[1]; // gets 'glb', 'obj', or 'rbxm'
-            
-            // Set correct headers based on format
-            if (format === 'glb') res.setHeader('Content-Type', 'model/gltf-binary');
-            else if (format === 'obj') res.setHeader('Content-Type', 'text/plain');
-            else res.setHeader('Content-Type', 'application/octet-stream');
+// 1. TEST ROUTE
 
-            res.setHeader('Content-Disposition', `inline; filename="avatar.${format}"`);
-
-            // Fetch 3D metadata
-            const thumb3dRes = await axios.get(
-                `https://thumbnails.roproxy.com/v1/users/avatar-3d?userIds=${targetUserId}`,
-                { headers: { "User-Agent": "Mozilla/5.0" } }
-            );
-
-            const roblox3dUrl = thumb3dRes.data?.data?.[0]?.imageUrl;
-            if (!roblox3dUrl) return res.status(404).send("3D profile not found.");
-
-            // Fetch raw data and rewrite texture links to bypass 403s
-            console.log("3D URL:", roblox3dUrl);
-
-const modelDataRes = await axios.get(
-    roblox3dUrl,
-    {
-        responseType: 'text',
-        headers: {
-            "User-Agent": "Mozilla/5.0"
-        }
-    }
-);
-            let rawModelText = modelDataRes.data;
-
-            const robloxImageRegex = /https:\/\/images\.roblox\.com\/asset\/\?id=(\d+)/g;
-            let fixedModelText = rawModelText.replace(robloxImageRegex, (match, imgId) => {
-                return `https://riglify.onrender.com/download/${imgId}?isTexture=true`;
-            });
-
-            return res.send(fixedModelText);
-        }
+if (assetId.startsWith('all_')) {
+    return res.send("ALL_GLB ROUTE WORKING");
+}
 
         // 2. HANDLE TEXTURE REQUESTS (The 403 Fix)
         if (req.query.isTexture === 'true') {
@@ -361,7 +326,7 @@ const modelDataRes = await axios.get(
 
             const assetRes = await axios.get(directImageUrl, { responseType: 'stream' });
             console.log("Downloading asset:", assetId);
-console.log("Texture URL:", directImageUrl);
+console.log("URL:", catalogDownloadUrl);
             return assetRes.data.pipe(res);
         }
 
