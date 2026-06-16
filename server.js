@@ -310,7 +310,7 @@ app.get('/download/:id', async (req, res) => {
 if (assetId.startsWith('all_')) {
 
     const thumb3dRes = await axios.get(
-        `https://thumbnails.roproxy.com/v1/users/avatar-3d?userIds=${targetUserId}`,
+        `https://thumbnails.roblox.com/v1/users/avatar-3d?userIds=${targetUserId}`,
         {
             headers: {
                 "User-Agent": "Mozilla/5.0"
