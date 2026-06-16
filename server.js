@@ -308,7 +308,17 @@ app.get('/download/:id', async (req, res) => {
 // 1. TEST ROUTE
 
 if (assetId.startsWith('all_')) {
-    return res.send("ALL_GLB ROUTE WORKING");
+
+    const thumb3dRes = await axios.get(
+        `https://thumbnails.roproxy.com/v1/users/avatar-3d?userIds=${targetUserId}`,
+        {
+            headers: {
+                "User-Agent": "Mozilla/5.0"
+            }
+        }
+    );
+
+    return res.json(thumb3dRes.data);
 }
 
         // 2. HANDLE TEXTURE REQUESTS (The 403 Fix)
