@@ -142,13 +142,6 @@ app.get("/avatar/:username", async(req,res)=>{
         /* 3D THUMBNAIL */
 let thumb3dUrl = null;
 
-            thumb3dUrl = thumb3dRes.data?.data?.[0]?.imageUrl || null;
-            console.log("3D thumbnail success");
-
-        } catch(err) {
-            console.log("3D THUMBNAIL FAILED");
-        }
-
         /* AVATAR DETAILS */
         console.log("Fetching avatar details...");
         
@@ -295,15 +288,12 @@ app.get('/download/:id', async (req, res) => {
     try {
         // 1. HANDLE FULL AVATAR EXPORTS (GLB, OBJ, RBXM)
 // 1. TEST ROUTE
-
 if (assetId.startsWith('all_')) {
     return res.status(501).send(
         "Avatar export formats are temporarily unavailable."
     );
 }
 
-    return res.json(thumb3dRes.data);
-}
 
         // 2. HANDLE TEXTURE REQUESTS (The 403 Fix)
         if (req.query.isTexture === 'true') {
@@ -320,7 +310,7 @@ if (assetId.startsWith('all_')) {
 
             const assetRes = await axios.get(directImageUrl, { responseType: 'stream' });
             console.log("Downloading asset:", assetId);
-console.log("Download URL:", catalogDownloadUrl);
+console.log("Texture URL:", directImageUrl);
             return assetRes.data.pipe(res);
         }
 
