@@ -147,11 +147,13 @@ app.get("/avatar/:username", async(req,res)=>{
         try {
 
             const thumb3dRes = await axios.get(
-                `https://thumbnails.roblox.com/v1/users/avatar-3d?userIds=${userId}`,
-                {
-                    headers: { "User-Agent": "Mozilla/5.0" }
-                }
-            );
+    `https://thumbnails.roproxy.com/v1/users/avatar-3d?userIds=${targetUserId}`,
+    {
+        headers: {
+            "User-Agent": "Mozilla/5.0"
+        }
+    }
+);
 
             thumb3dUrl = thumb3dRes.data?.data?.[0]?.imageUrl || null;
             console.log("3D thumbnail success");
