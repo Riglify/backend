@@ -383,6 +383,35 @@ app.get("/auth/github", (req,res)=>{
 
 });
 
+
+/// TEMPORARY TEMPORARY TEMPORARY TEMPORARY
+app.get("/test3d/:id", async (req, res) => {
+
+    try {
+
+        const response = await axios.get(
+            `https://thumbnails.roblox.com/v1/users/avatar-3d?userIds=${req.params.id}`,
+            {
+                headers: {
+                    "User-Agent": "Mozilla/5.0"
+                }
+            }
+        );
+
+        res.json(response.data);
+
+    } catch(err) {
+
+        res.status(500).json({
+            status: err.response?.status,
+            data: err.response?.data
+        });
+
+    }
+
+});
+/// end of TEMPORARY TEMPORARY TEMPORARY TEMPORARY
+
 /* GITHUB CALLBACK */
 
 app.get("/auth/github/callback", async(req,res)=>{
