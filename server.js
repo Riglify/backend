@@ -338,7 +338,7 @@ if (assetId.startsWith('all_')) {
 
             const assetRes = await axios.get(directImageUrl, { responseType: 'stream' });
             console.log("Downloading asset:", assetId);
-console.log("URL:", catalogDownloadUrl);
+console.log("Texture URL:", directImageUrl);
             return assetRes.data.pipe(res);
         }
 
