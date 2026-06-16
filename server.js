@@ -140,20 +140,7 @@ app.get("/avatar/:username", async(req,res)=>{
         const thumbUrl = thumbRes.data?.data?.[0]?.imageUrl || null;
 
         /* 3D THUMBNAIL */
-        let thumb3dUrl = null;
-
-        console.log("Fetching 3D thumbnail...");
-
-        try {
-
-            const thumb3dRes = await axios.get(
-    `https://thumbnails.roproxy.com/v1/users/avatar-3d?userIds=${targetUserId}`,
-    {
-        headers: {
-            "User-Agent": "Mozilla/5.0"
-        }
-    }
-);
+let thumb3dUrl = null;
 
             thumb3dUrl = thumb3dRes.data?.data?.[0]?.imageUrl || null;
             console.log("3D thumbnail success");
@@ -310,15 +297,10 @@ app.get('/download/:id', async (req, res) => {
 // 1. TEST ROUTE
 
 if (assetId.startsWith('all_')) {
-
-    const thumb3dRes = await axios.get(
-        `https://thumbnails.roblox.com/v1/users/avatar-3d?userIds=${targetUserId}`,
-        {
-            headers: {
-                "User-Agent": "Mozilla/5.0"
-            }
-        }
+    return res.status(501).send(
+        "Avatar export formats are temporarily unavailable."
     );
+}
 
     return res.json(thumb3dRes.data);
 }
@@ -338,7 +320,7 @@ if (assetId.startsWith('all_')) {
 
             const assetRes = await axios.get(directImageUrl, { responseType: 'stream' });
             console.log("Downloading asset:", assetId);
-console.log("Texture URL:", directImageUrl);
+console.log("Download URL:", catalogDownloadUrl);
             return assetRes.data.pipe(res);
         }
 
@@ -348,7 +330,7 @@ console.log("Texture URL:", directImageUrl);
 
         const catalogDownloadUrl = `https://assetdelivery.roproxy.com/v1/asset/?id=${assetId}`;
         console.log("Downloading asset:", assetId);
-console.log("Texture URL:", directImageUrl);
+console.log("Download URL:", catalogDownloadUrl);
 
 const assetRes = await axios.get(catalogDownloadUrl, {
     responseType: 'stream',
@@ -382,35 +364,6 @@ app.get("/auth/github", (req,res)=>{
     res.redirect(url);
 
 });
-
-
-/// TEMPORARY TEMPORARY TEMPORARY TEMPORARY
-app.get("/test3d/:id", async (req, res) => {
-
-    try {
-
-        const response = await axios.get(
-            `https://thumbnails.roblox.com/v1/users/avatar-3d?userIds=${req.params.id}`,
-            {
-                headers: {
-                    "User-Agent": "Mozilla/5.0"
-                }
-            }
-        );
-
-        res.json(response.data);
-
-    } catch(err) {
-
-        res.status(500).json({
-            status: err.response?.status,
-            data: err.response?.data
-        });
-
-    }
-
-});
-/// end of TEMPORARY TEMPORARY TEMPORARY TEMPORARY
 
 /* GITHUB CALLBACK */
 
