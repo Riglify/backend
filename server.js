@@ -277,71 +277,164 @@ let thumb3dUrl = null;
    RIGLIFY DOWNLOAD SYSTEM - MULTI-FORMAT & TEXTURE ENGINE
    ========================================================================== */
 
-app.get('/download/:id', async (req, res) => {
-    const assetId = req.params.id;
-    // Grab userId from the URL query (e.g., ?userId=12345)
-    const targetUserId = req.query.userId || 2012; 
+/* ==========================================================================
+   RIGLIFY DOWNLOAD SYSTEM
+   ========================================================================== */
 
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET');
+app.get("/download/:id", async (req, res) => {
+
+    const assetId = req.params.id;
+    const targetUserId = req.query.userId;
+
+    res.setHeader("Access-Control-Allow-Origin", "*");
 
     try {
-        // 1. HANDLE FULL AVATAR EXPORTS (GLB, OBJ, RBXM)
-// 1. TEST ROUTE
-if (assetId.startsWith('all_')) {
-    return res.status(501).send(
-        "Avatar export formats are temporarily unavailable."
-    );
-}
 
+        /* ============================================================
+           FULL AVATAR EXPORT
+           ============================================================ */
 
-        // 2. HANDLE TEXTURE REQUESTS (The 403 Fix)
-        if (req.query.isTexture === 'true') {
-            res.setHeader('Content-Type', 'image/png');
-            
-            // Get the public thumbnail URL which doesn't 403
-            const thumbMapRes = await axios.get(
-                `https://thumbnails.roproxy.com/v1/assets?assetIds=${assetId}&size=420x420&format=Png`,
-                { headers: { "User-Agent": "Mozilla/5.0" } }
+        if (assetId.startsWith("all_")) {
+
+            if (!targetUserId) {
+                return res.status(400).send("Missing userId.");
+            }
+
+            const format = assetId.replace("all_", "");
+
+            console.log(`Starting ${format.toUpperCase()} export for user ${targetUserId}`);
+
+            /* GET AVATAR */
+
+            const avatarRes = await axios.get(
+                `https://avatar.roblox.com/v1/users/${targetUserId}/avatar`
             );
 
-            const directImageUrl = thumbMapRes.data?.data?.[0]?.imageUrl;
-            if (!directImageUrl) throw new Error("Texture not found in public CDN");
+            const assets = avatarRes.data?.assets || [];
 
-            const assetRes = await axios.get(directImageUrl, { responseType: 'stream' });
-            console.log("Downloading asset:", assetId);
-console.log("Texture URL:", directImageUrl);
-            return assetRes.data.pipe(res);
+            if (!assets.length) {
+                return res.status(404).send("No avatar assets found.");
+            }
+
+            /* ZIP RESPONSE */
+
+            res.setHeader(
+                "Content-Type",
+                "application/zip"
+            );
+
+            res.setHeader(
+                "Content-Disposition",
+                `attachment; filename="riglify_avatar_${targetUserId}_${format}.zip"`
+            );
+
+            const archive = archiver("zip", {
+                zlib: { level: 9 }
+            });
+
+            archive.on("error", err => {
+                console.error("ZIP ERROR:", err);
+                if (!res.headersSent) {
+                    res.status(500).send("Failed to create ZIP.");
+                }
+            });
+
+            archive.pipe(res);
+
+            /* DOWNLOAD EACH ROBLOX ASSET */
+
+            for (const asset of assets) {
+
+                try {
+
+                    const assetId = asset.id;
+
+                    console.log("Fetching asset:", assetId);
+
+                    const assetRes = await axios.get(
+                        `https://assetdelivery.roproxy.com/v1/asset/?id=${assetId}`,
+                        {
+                            responseType: "arraybuffer",
+                            headers: {
+                                "User-Agent": "Mozilla/5.0"
+                            }
+                        }
+                    );
+
+                    archive.append(
+                        Buffer.from(assetRes.data),
+                        {
+                            name: `assets/${assetId}.rbxm`
+                        }
+                    );
+
+                } catch (assetError) {
+
+                    console.error(
+                        `Failed to download asset ${asset.id}:`,
+                        assetError.message
+                    );
+
+                }
+
+            }
+
+            /* CREATE A README */
+
+            archive.append(
+                `Riglify Avatar Export\n\nUser ID: ${targetUserId}\nFormat requested: ${format.toUpperCase()}\n\nNote: This is the initial Riglify export system.\n`,
+                {
+                    name: "README.txt"
+                }
+            );
+
+            await archive.finalize();
+
+            return;
         }
 
-        // 3. STANDARD INDIVIDUAL ITEM DOWNLOADS
-        res.setHeader('Content-Type', 'application/octet-stream');
-        res.setHeader('Content-Disposition', `attachment; filename="asset_${assetId}.rbxm"`);
 
-        const catalogDownloadUrl = `https://assetdelivery.roproxy.com/v1/asset/?id=${assetId}`;
-        console.log("Downloading asset:", assetId);
-console.log("Download URL:", catalogDownloadUrl);
+        /* ============================================================
+           INDIVIDUAL ASSET DOWNLOAD
+           ============================================================ */
 
-const assetRes = await axios.get(catalogDownloadUrl, {
-    responseType: 'stream',
-    headers: {
-        "User-Agent": "Mozilla/5.0"
-    }
-});
+        res.setHeader(
+            "Content-Type",
+            "application/octet-stream"
+        );
+
+        res.setHeader(
+            "Content-Disposition",
+            `attachment; filename="asset_${assetId}.rbxm"`
+        );
+
+        const assetRes = await axios.get(
+            `https://assetdelivery.roproxy.com/v1/asset/?id=${assetId}`,
+            {
+                responseType: "stream",
+                headers: {
+                    "User-Agent": "Mozilla/5.0"
+                }
+            }
+        );
+
         return assetRes.data.pipe(res);
 
     } catch (err) {
-    console.error("========== DOWNLOAD FAILURE ==========");
-    console.error("Message:", err.message);
-    console.error("Status:", err.response?.status);
-    console.error("URL:", err.config?.url);
-    console.error("Response:", err.response?.data);
-    console.error("=====================================");
 
-    if (!res.headersSent) {
-        return res.status(500).send(err.message);
+        console.error("========== DOWNLOAD FAILURE ==========");
+        console.error(err.message);
+        console.error(err.response?.status);
+        console.error("======================================");
+
+        if (!res.headersSent) {
+            res.status(500).send(
+                "Download failed: " + err.message
+            );
+        }
+
     }
-}
+
 });
 
 /* GITHUB LOGIN */
