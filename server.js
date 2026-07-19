@@ -275,51 +275,36 @@ app.get('/download/:id', async (req, res) => {
 
     try {
 
-        /* FULL AVATAR EXPORTS */
+if (assetId.startsWith('all_')) {
 
-        if (assetId.startsWith('all_')) {
+    if (!targetUserId) {
+        return res.status(400).json({
+            success: false,
+            error: "Missing userId."
+        });
+    }
 
-            return res.status(501).json({
-                success: false,
-                error: "Full avatar exports are not available yet."
-            });
+    const format = assetId.replace('all_', '');
 
-        }
+    console.log(
+        `Starting ${format.toUpperCase()} export for user ${targetUserId}`
+    );
 
-        /* TEXTURE DOWNLOAD */
+    const exportResponse = await axios.get(
+        `https://riglify.onrender.com/avatar/${targetUserId}`
+    );
 
-        if (req.query.isTexture === 'true') {
+    const avatarData = exportResponse.data;
 
-            const thumbMapRes = await axios.get(
-                `https://thumbnails.roproxy.com/v1/assets?assetIds=${assetId}&size=420x420&format=Png`,
-                {
-                    headers: {
-                        "User-Agent": "Mozilla/5.0"
-                    }
-                }
-            );
+    if (!avatarData || !avatarData.success) {
+        throw new Error("Could not retrieve avatar data.");
+    }
 
-            const imageUrl =
-                thumbMapRes.data?.data?.[0]?.imageUrl;
-
-            if (!imageUrl) {
-                throw new Error("Texture not found.");
-            }
-
-            const textureRes = await axios.get(
-                imageUrl,
-                {
-                    responseType: 'stream'
-                }
-            );
-
-            res.setHeader(
-                'Content-Type',
-                'image/png'
-            );
-
-            return textureRes.data.pipe(res);
-        }
+    return res.status(501).json({
+        success: false,
+        error: `${format.toUpperCase()} generation is not implemented yet.`
+    });
+}
 
         /* INDIVIDUAL ASSET DOWNLOAD */
 
