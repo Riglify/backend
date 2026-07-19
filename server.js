@@ -387,7 +387,58 @@ if (assetId.startsWith('all_')) {
 
     }
 
+    }
+
+    // INDIVIDUAL ASSET DOWNLOAD
+
+    const assetUrl =
+        `https://assetdelivery.roproxy.com/v1/asset/?id=${assetId}`;
+
+    console.log("Downloading asset:", assetId);
+    console.log("Download URL:", assetUrl);
+
+    const assetRes = await axios.get(
+        assetUrl,
+        {
+            responseType: 'stream',
+            headers: {
+                "User-Agent": "Mozilla/5.0"
+            }
+        }
+    );
+
+    res.setHeader(
+        'Content-Type',
+        'application/octet-stream'
+    );
+
+    res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="asset_${assetId}.rbxm"`
+    );
+
+    return assetRes.data.pipe(res);
+
+} catch (err) {
+
+    console.error(
+        "========== DOWNLOAD FAILURE =========="
+    );
+
+    console.error("Message:", err.message);
+    console.error("Status:", err.response?.status);
+    console.error("URL:", err.config?.url);
+
+    if (!res.headersSent) {
+        return res.status(500).json({
+            success: false,
+            error: err.message
+        });
+    }
+
 }
+
+});
 
 /* GITHUB LOGIN */
 
