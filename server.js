@@ -300,10 +300,19 @@ if (assetId.startsWith('all_')) {
         throw new Error("Could not retrieve avatar data.");
     }
 
-    return res.status(501).json({
-        success: false,
-        error: `${format.toUpperCase()} generation is not implemented yet.`
-    });
+    const jsonData = JSON.stringify(avatarData, null, 2);
+
+    res.setHeader(
+        "Content-Type",
+        "application/json"
+    );
+
+    res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="Riglify_${targetUserId}_Avatar.json"`
+    );
+
+    return res.send(jsonData);
 }
 
         /* INDIVIDUAL ASSET DOWNLOAD */
