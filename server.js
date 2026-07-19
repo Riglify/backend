@@ -3,6 +3,7 @@
 const express = require("express");
 const axios = require("axios");
 const cors = require("cors");
+const archiver = require("archiver");
 require("dotenv").config();
 
 const app = express();
@@ -287,73 +288,95 @@ if (assetId.startsWith('all_')) {
     const format = assetId.replace('all_', '');
 
     console.log(
-        `Starting ${format.toUpperCase()} export for user ${targetUserId}`
+        `Starting ${format.toUpperCase()} ZIP export for user ${targetUserId}`
     );
 
-    const exportResponse = await axios.get(
-        `https://riglify.onrender.com/avatar/${targetUserId}`
-    );
+    try {
 
-    const avatarData = exportResponse.data;
+        // Fetch the avatar data from our own avatar endpoint
+        const exportResponse = await axios.get(
+            `https://riglify.onrender.com/avatar/${targetUserId}`
+        );
 
-    if (!avatarData || !avatarData.success) {
-        throw new Error("Could not retrieve avatar data.");
-    }
+        const avatarData = exportResponse.data;
 
-    const jsonData = JSON.stringify(avatarData, null, 2);
+        if (!avatarData || !avatarData.success) {
+            throw new Error("Could not retrieve avatar data.");
+        }
 
-    res.setHeader(
-        "Content-Type",
-        "application/json"
-    );
+        const archive = archiver("zip", {
+            zlib: { level: 9 }
+        });
 
-    res.setHeader(
-        "Content-Disposition",
-        `attachment; filename="Riglify_${targetUserId}_Avatar.json"`
-    );
+        res.attachment(
+            `Riglify_${avatarData.username}_${format}.zip`
+        );
 
-    return res.send(jsonData);
-}
+        archive.on("error", (err) => {
+            throw err;
+        });
 
-        /* INDIVIDUAL ASSET DOWNLOAD */
+        archive.pipe(res);
 
-        const assetUrl =
-            `https://assetdelivery.roproxy.com/v1/asset/?id=${assetId}`;
-
-        console.log("Downloading asset:", assetId);
-        console.log("Download URL:", assetUrl);
-
-        const assetRes = await axios.get(
-            assetUrl,
+        // Add the avatar data JSON into the ZIP
+        archive.append(
+            JSON.stringify(avatarData, null, 2),
             {
-                responseType: 'stream',
-                headers: {
-                    "User-Agent": "Mozilla/5.0"
-                }
+                name: `Riglify_${avatarData.username}_avatar.json`
             }
         );
 
-        res.setHeader(
-            'Content-Type',
-            'application/octet-stream'
+        // Download each asset and put it in the ZIP
+        for (const asset of avatarData.assets || []) {
+
+            try {
+
+                const assetResponse = await axios.get(
+                    `https://assetdelivery.roproxy.com/v1/asset/?id=${asset.id}`,
+                    {
+                        responseType: "arraybuffer",
+                        headers: {
+                            "User-Agent": "Mozilla/5.0"
+                        }
+                    }
+                );
+
+                archive.append(
+                    assetResponse.data,
+                    {
+                        name: `assets/asset_${asset.id}.rbxm`
+                    }
+                );
+
+                console.log(
+                    `Added asset ${asset.id} to ZIP`
+                );
+
+            } catch (assetError) {
+
+                console.error(
+                    `Failed to download asset ${asset.id}:`,
+                    assetError.message
+                );
+
+            }
+
+        }
+
+        await archive.finalize();
+
+        console.log(
+            "ZIP successfully created."
         );
 
-        res.setHeader(
-            'Content-Disposition',
-            `attachment; filename="asset_${assetId}.rbxm"`
-        );
-
-        return assetRes.data.pipe(res);
+        return;
 
     } catch (err) {
 
         console.error(
-            "========== DOWNLOAD FAILURE =========="
+            "ZIP EXPORT ERROR:",
+            err.message
         );
-
-        console.error("Message:", err.message);
-        console.error("Status:", err.response?.status);
-        console.error("URL:", err.config?.url);
 
         if (!res.headersSent) {
             return res.status(500).json({
@@ -364,7 +387,7 @@ if (assetId.startsWith('all_')) {
 
     }
 
-});
+}
 
 /* GITHUB LOGIN */
 
