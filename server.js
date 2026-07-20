@@ -14,6 +14,8 @@ const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
 const REDIRECT_URI = process.env.REDIRECT_URI;
 
+
+
 /* LOGIN */
 
 app.get("/auth/discord", (req,res)=>{
@@ -303,6 +305,8 @@ if (assetId.startsWith('all_')) {
         if (!avatarData || !avatarData.success) {
             throw new Error("Could not retrieve avatar data.");
         }
+        
+        const textures = [];
 
         const archive = archiver("zip", {
             zlib: { level: 9 }
