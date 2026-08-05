@@ -9,221 +9,265 @@ require("dotenv").config();
 const app = express();
 
 app.use(cors());
-app.use(express.json());
 
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
 const REDIRECT_URI = process.env.REDIRECT_URI;
 
 
-/* ==========================================================================
-   DISCORD LOGIN
-   ========================================================================== */
 
-app.get("/auth/discord", (req, res) => {
+/* LOGIN */
+
+app.get("/auth/discord", (req,res)=>{
 
     const url =
-        `https://discord.com/oauth2/authorize` +
-        `?client_id=${CLIENT_ID}` +
-        `&response_type=code` +
-        `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
-        `&scope=identify`;
+    `https://discord.com/oauth2/authorize?client_id=${CLIENT_ID}&response_type=code&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=identify`;
 
     res.redirect(url);
 
 });
 
+/* CALLBACK */
 
-/* ==========================================================================
-   DISCORD CALLBACK
-   ========================================================================== */
-
-app.get("/auth/discord/callback", async (req, res) => {
+app.get("/auth/discord/callback", async(req,res)=>{
 
     const code = req.query.code;
 
-    if (!code) {
-        return res.status(400).send("Missing Discord authorization code.");
-    }
-
-    try {
+    try{
 
         const tokenRes = await axios.post(
             "https://discord.com/api/oauth2/token",
-
             new URLSearchParams({
                 client_id: CLIENT_ID,
                 client_secret: CLIENT_SECRET,
                 grant_type: "authorization_code",
-                code: code,
+                code,
                 redirect_uri: REDIRECT_URI
             }),
-
             {
-                headers: {
-                    "Content-Type":
-                        "application/x-www-form-urlencoded"
+                headers:{
+                    "Content-Type":"application/x-www-form-urlencoded"
                 }
             }
         );
 
-        const accessToken =
-            tokenRes.data.access_token;
+        const accessToken = tokenRes.data.access_token;
 
         const userRes = await axios.get(
-            "https://discord.com/api/users/@me",
-
-            {
-                headers: {
-                    Authorization:
-                        `Bearer ${accessToken}`
-                }
-            }
-        );
+    "https://discord.com/api/users/@me",
+    {
+        headers:{
+            Authorization:`Bearer ${accessToken}`
+        }
+    }
+);
 
         const user = userRes.data;
 
         res.redirect(
-            `https://riglify.github.io/` +
-            `?username=${encodeURIComponent(user.username)}` +
-            `&avatar=${encodeURIComponent(user.avatar || "")}` +
-            `&id=${encodeURIComponent(user.id)}`
+            `https://riglify.github.io/?username=${encodeURIComponent(user.username)}&avatar=${user.avatar}&id=${user.id}`
         );
 
-    } catch (err) {
+    }catch(err){
 
-        console.error(
-            "DISCORD OAUTH ERROR:",
-            err.response?.data || err.message
-        );
+        console.log(err.response?.data || err.message);
 
-        res.status(500).send(
-            "Discord login failed."
-        );
+        res.send("OAuth failed.");
 
     }
 
 });
 
+/* AVATAR FETCHER */
 
-/* ==========================================================================
-   ROBLOX AVATAR FETCHER
-   ========================================================================== */
-
-app.get("/avatar/:identifier", async (req, res) => {
+app.get("/avatar/:username", async (req, res) => {
 
     const identifier =
-        String(req.params.identifier || "").trim();
+        String(req.params.username || "").trim();
 
     if (!identifier) {
 
         return res.status(400).json({
             success: false,
-            error: "Missing Roblox username or user ID."
+            error: "Missing Roblox username."
         });
 
     }
 
     try {
 
-        let userId;
-        let username;
-
         /*
-        ----------------------------------------------------------------------
-        IF THE IDENTIFIER IS A NUMBER:
-        Treat it as a Roblox user ID.
-        ----------------------------------------------------------------------
+        ============================================================
+        FIND ROBLOX USER
+        ============================================================
         */
 
-        if (/^\d+$/.test(identifier)) {
+        const userLookup =
+            await axios.post(
 
-            userId = identifier;
+                "https://users.roblox.com/v1/usernames/users",
 
-            const userResponse =
-                await axios.get(
-                    `https://users.roblox.com/v1/users/${userId}`
-                );
+                {
+                    usernames: [identifier],
+                    excludeBannedUsers: false
+                },
 
-            username =
-                userResponse.data.name;
+                {
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    }
+                }
+
+            );
+
+
+        const foundUser =
+            userLookup.data?.data?.[0];
+
+
+        if (!foundUser) {
+
+            return res.status(404).json({
+
+                success: false,
+
+                error:
+                    "Roblox user not found."
+
+            });
 
         }
 
+
+        const userId =
+            String(foundUser.id);
+
+
+        const username =
+            foundUser.name;
+
+
         /*
-        ----------------------------------------------------------------------
-        IF THE IDENTIFIER IS TEXT:
-        Treat it as a Roblox username.
-        ----------------------------------------------------------------------
+        ============================================================
+        GET AVATAR THUMBNAIL
+        ============================================================
         */
 
-        else {
+        let thumbnail = "";
 
-            const userLookup =
-                await axios.post(
 
-                    "https://users.roblox.com/v1/usernames/users",
+        try {
 
-                    {
-                        usernames: [identifier],
-                        excludeBannedUsers: false
-                    },
+            const thumbnailResponse =
+                await axios.get(
+
+                    "https://thumbnails.roblox.com/v1/users/avatar",
 
                     {
-                        headers: {
-                            "Content-Type":
-                                "application/json"
+                        params: {
+
+                            userIds:
+                                userId,
+
+                            size:
+                                "720x720",
+
+                            format:
+                                "Png",
+
+                            isCircular:
+                                false
+
                         }
+
                     }
 
                 );
 
-            const foundUser =
-                userLookup.data.data?.[0];
 
-            if (!foundUser) {
+            thumbnail =
+                thumbnailResponse
+                    .data
+                    ?.data?.[0]
+                    ?.imageUrl || "";
 
-                return res.status(404).json({
+        } catch (thumbnailError) {
 
-                    success: false,
+            console.warn(
 
-                    error:
-                        "Roblox user not found."
+                "Could not load avatar thumbnail:",
 
-                });
+                thumbnailError.response?.data ||
+                thumbnailError.message
 
-            }
-
-            userId =
-                String(foundUser.id);
-
-            username =
-                foundUser.name;
+            );
 
         }
 
 
-        /*
-        ----------------------------------------------------------------------
-        GET ROBLOX AVATAR THUMBNAIL
-        ----------------------------------------------------------------------
-        */
+/*
+============================================================
+GET WORN ASSETS
+============================================================
+*/
+
+let assets = [];
+
+try {
+
+    /*
+    --------------------------------------------------------
+    GET THE ASSET IDS THE USER IS WEARING
+    --------------------------------------------------------
+    */
+
+    const avatarResponse =
+        await axios.get(
+
+            `https://avatar.roblox.com/v1/users/${userId}/currently-wearing`
+
+        );
+
+
+    const wornAssets =
+        avatarResponse.data?.assetIds || [];
+
+
+    console.log(
+        "Worn Roblox asset IDs:",
+        wornAssets
+    );
+
+
+    /*
+    --------------------------------------------------------
+    GET ROBLOX ASSET THUMBNAILS
+    --------------------------------------------------------
+    */
+
+    if (wornAssets.length > 0) {
 
         const thumbnailResponse =
             await axios.get(
 
-                "https://thumbnails.roblox.com/v1/users/avatar",
+                "https://thumbnails.roblox.com/v1/assets",
 
                 {
+
                     params: {
 
-                        userIds: userId,
+                        assetIds:
+                            wornAssets.join(","),
 
-                        size: "720x720",
+                        size:
+                            "420x420",
 
-                        format: "Png",
+                        format:
+                            "Png",
 
-                        isCircular: false
+                        isCircular:
+                            false
 
                     }
 
@@ -231,38 +275,52 @@ app.get("/avatar/:identifier", async (req, res) => {
 
             );
 
-        const thumbnail =
-            thumbnailResponse
-                .data
-                ?.data?.[0]
-                ?.imageUrl;
+
+        const thumbnailData =
+            thumbnailResponse.data?.data || [];
+
+
+        console.log(
+
+            "Roblox thumbnail API response:",
+
+            JSON.stringify(
+                thumbnailData,
+                null,
+                2
+            )
+
+        );
 
 
         /*
-        ----------------------------------------------------------------------
-        GET ROBLOX WORN ASSETS
-        ----------------------------------------------------------------------
+        ----------------------------------------------------
+        MATCH EVERY ASSET ID WITH ROBLOX'S imageUrl
+        ----------------------------------------------------
         */
 
-        let assets = [];
+        assets =
+            wornAssets.map(
 
-        try {
+                (assetId) => {
 
-            const avatarResponse =
-                await axios.get(
+                    const assetThumbnail =
+                        thumbnailData.find(
 
-                    `https://avatar.roblox.com/v1/users/${userId}/currently-wearing`
+                            (item) =>
 
-                );
+                                String(
+                                    item.targetId
+                                ) ===
 
-            const wornAssets =
-                avatarResponse
-                    .data
-                    ?.assetIds || [];
+                                String(
+                                    assetId
+                                )
 
-            assets =
-                wornAssets.map(
-                    (assetId) => ({
+                        );
+
+
+                    return {
 
                         id:
                             String(assetId),
@@ -270,60 +328,98 @@ app.get("/avatar/:identifier", async (req, res) => {
                         name:
                             `Roblox Asset ${assetId}`,
 
+                        /*
+                        This is the actual CDN image URL
+                        returned inside Roblox's JSON.
+                        */
+
                         image:
-                            `https://www.roblox.com/asset-thumbnail/image?assetId=${assetId}&width=420&height=420&format=png`,
+                            assetThumbnail?.imageUrl || "",
+
+                        thumbnailState:
+                            assetThumbnail?.state ||
+                            "Unknown",
 
                         assetType:
                             "Asset"
 
-                    })
-                );
+                    };
 
-        } catch (assetError) {
-
-            console.warn(
-
-                "Could not load worn assets:",
-
-                assetError.response?.data ||
-                assetError.message
+                }
 
             );
 
-        }
+    }
 
+
+    console.log(
+
+        "Final assets sent to Riglify:",
+
+        JSON.stringify(
+            assets,
+            null,
+            2
+        )
+
+    );
+
+
+} catch (assetError) {
+
+    console.error(
+
+        "ROBLOX WORN ASSET ERROR:",
+
+        assetError.response?.data ||
+        assetError.message
+
+    );
+
+}
 
         /*
-        ----------------------------------------------------------------------
-        SEND AVATAR DATA TO THE FRONTEND
-        ----------------------------------------------------------------------
+        ============================================================
+        SEND AVATAR DATA
+        ============================================================
         */
 
         return res.json({
 
-            success: true,
+            success:
+                true,
 
-            userId: userId,
+            userId:
+                userId,
 
-            username: username,
+            username:
+                username,
 
             thumbnail:
-                thumbnail || "",
+                thumbnail,
 
-            assets: assets
+            assets:
+                assets
 
         });
+
 
     } catch (err) {
 
         console.error(
+
             "AVATAR FETCH ERROR:",
-            err.response?.data || err.message
+
+            err.response?.data ||
+            err.message
+
         );
+
 
         return res.status(500).json({
 
-            success: false,
+            success:
+                false,
 
             error:
                 "Failed to retrieve Roblox avatar."
@@ -334,333 +430,186 @@ app.get("/avatar/:identifier", async (req, res) => {
 
 });
 
-
 /* ==========================================================================
    RIGLIFY DOWNLOAD SYSTEM
    ========================================================================== */
 
-app.get("/download/:id", async (req, res) => {
+app.get('/download/:id', async (req, res) => {
 
-    const assetId =
-        String(req.params.id || "");
+    const assetId = req.params.id;
+    const targetUserId = req.query.userId;
 
-    const targetUserId =
-        String(req.query.userId || "");
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET');
 
     try {
 
         /*
-        ======================================================================
+        ============================================================
         OBJ ZIP EXPORT
-        ======================================================================
+        ============================================================
         */
 
         if (assetId === "all_obj") {
 
             if (!targetUserId) {
-
                 return res.status(400).json({
-
                     success: false,
-
-                    error:
-                        "Missing Roblox user ID."
-
+                    error: "Missing userId."
                 });
-
             }
 
             console.log(
-
-                `Starting OBJ export for Roblox user ${targetUserId}`
-
+                `Starting OBJ export for user ${targetUserId}`
             );
 
+            // Fetch avatar data
+            const exportResponse = await axios.get(
+                `https://riglify.onrender.com/avatar/${targetUserId}`
+            );
 
-            /*
-            ------------------------------------------------------------------
-            GET USER INFORMATION
-            ------------------------------------------------------------------
-            */
+            const avatarData = exportResponse.data;
 
-            const avatarResponse =
-                await axios.get(
-
-                    `http://127.0.0.1:${PORT}/avatar/${targetUserId}`
-
-                );
-
-            const avatarData =
-                avatarResponse.data;
-
-
-            if (
-                !avatarData ||
-                !avatarData.success
-            ) {
-
+            if (!avatarData || !avatarData.success) {
                 throw new Error(
-
                     "Could not retrieve avatar data."
-
                 );
-
             }
 
+            const archive = archiver("zip", {
+                zlib: { level: 9 }
+            });
 
-            /*
-            ------------------------------------------------------------------
-            CREATE ZIP
-            ------------------------------------------------------------------
-            */
-
-            const archive =
-                archiver(
-
-                    "zip",
-
-                    {
-                        zlib: {
-                            level: 9
-                        }
-                    }
-
-                );
-
-
+            // Example:
+            // Riglify_Tylernipad123_obj.zip
             res.attachment(
-
                 `Riglify_${avatarData.username}_obj.zip`
-
             );
 
-
-            archive.on(
-
-                "error",
-
-                (error) => {
-
-                    console.error(
-
-                        "ZIP ARCHIVE ERROR:",
-
-                        error
-
-                    );
-
-                    if (!res.headersSent) {
-
-                        res.status(500).end();
-
-                    }
-
-                }
-
-            );
-
+            archive.on("error", (err) => {
+                throw err;
+            });
 
             archive.pipe(res);
 
-
             /*
-            ------------------------------------------------------------------
-            TEMPORARY OBJ PLACEHOLDER
-            ------------------------------------------------------------------
+            ========================================================
+            TEMPORARY OBJ FILE
+            ========================================================
             */
 
-            const objContent =
-
-`# Riglify Roblox Avatar Export
+            const objContent = `
+# Riglify Roblox Avatar Export
 # Username: ${avatarData.username}
 # User ID: ${avatarData.userId}
 
-# This is a temporary OBJ placeholder.
-# Full Roblox avatar conversion is coming soon.
+# OBJ conversion will be added here.
 `;
 
-
             archive.append(
-
                 objContent,
-
                 {
-
-                    name:
-                        `${avatarData.username}.obj`
-
+                    name: `${avatarData.username}.obj`
                 }
-
             );
 
-
             /*
-            ------------------------------------------------------------------
-            EXPORT INFORMATION
-            ------------------------------------------------------------------
+            ========================================================
+            TEMPORARY MLB FILE
+            ========================================================
             */
 
-            const exportInfo =
-
-`Riglify Avatar Export
-
-Username:
-${avatarData.username}
-
-Roblox User ID:
-${avatarData.userId}
-
-Export Format:
-OBJ
-
-Status:
-Preview export
-
-The full avatar conversion engine
-is currently under development.
+            const mlbContent = `
+Riglify Avatar
+Username: ${avatarData.username}
+UserID: ${avatarData.userId}
 `;
 
-
             archive.append(
-
-                exportInfo,
-
+                mlbContent,
                 {
-
-                    name:
-                        "README.txt"
-
+                    name: `${avatarData.username}.mlb`
                 }
-
             );
-
-
-            /*
-            ------------------------------------------------------------------
-            FINISH ZIP
-            ------------------------------------------------------------------
-            */
 
             await archive.finalize();
 
-
             console.log(
-
-                `OBJ ZIP created for ${avatarData.username}`
-
+                `ZIP successfully created for ${avatarData.username}`
             );
 
             return;
-
         }
 
 
         /*
-        ======================================================================
-        INDIVIDUAL ROBLOX ASSET DOWNLOAD
-        ======================================================================
+        ============================================================
+        INDIVIDUAL ASSET DOWNLOAD
+        ============================================================
         */
 
-        if (
-            !assetId ||
-            !/^\d+$/.test(assetId)
-        ) {
-
-            return res.status(400).json({
-
-                success: false,
-
-                error:
-                    "Invalid Roblox asset ID."
-
-            });
-
-        }
-
-
         const assetUrl =
-
             `https://assetdelivery.roproxy.com/v1/asset/?id=${assetId}`;
 
+        console.log(
+            "Downloading asset:",
+            assetId
+        );
 
         console.log(
-
-            `Downloading Roblox asset ${assetId}`
-
+            "Download URL:",
+            assetUrl
         );
 
-
-        const assetResponse =
-            await axios.get(
-
-                assetUrl,
-
-                {
-
-                    responseType:
-                        "stream",
-
-                    headers: {
-
-                        "User-Agent":
-                            "Mozilla/5.0"
-
-                    }
-
+        const assetRes = await axios.get(
+            assetUrl,
+            {
+                responseType: 'stream',
+                headers: {
+                    "User-Agent": "Mozilla/5.0"
                 }
-
-            );
-
-
-        res.setHeader(
-
-            "Content-Type",
-
-            "application/octet-stream"
-
+            }
         );
 
-
         res.setHeader(
-
-            "Content-Disposition",
-
-            `attachment; filename="Riglify_Asset_${assetId}.rbxm"`
-
+            'Content-Type',
+            'application/octet-stream'
         );
 
+        res.setHeader(
+            'Content-Disposition',
+            `attachment; filename="asset_${assetId}.rbxm"`
+        );
 
-        return assetResponse
-            .data
-            .pipe(res);
+        return assetRes.data.pipe(res);
 
 
     } catch (err) {
 
         console.error(
-
             "========== DOWNLOAD FAILURE =========="
-
         );
-
 
         console.error(
-
-            err.response?.data ||
+            "Message:",
             err.message
-
         );
 
+        console.error(
+            "Status:",
+            err.response?.status
+        );
+
+        console.error(
+            "URL:",
+            err.config?.url
+        );
 
         if (!res.headersSent) {
 
             return res.status(500).json({
-
                 success: false,
-
-                error:
-                    "Download failed."
-
+                error: err.message
             });
 
         }
@@ -670,192 +619,81 @@ is currently under development.
 });
 
 
-/* ==========================================================================
-   GITHUB LOGIN
-   ========================================================================== */
 
-app.get("/auth/github", (req, res) => {
+/* GITHUB LOGIN */
+
+app.get("/auth/github", (req,res)=>{
 
     const url =
-
-        `https://github.com/login/oauth/authorize` +
-
-        `?client_id=${process.env.GITHUB_CLIENT_ID}` +
-
-        `&scope=read:user%20user:email`;
-
+`https://github.com/login/oauth/authorize?client_id=${process.env.GITHUB_CLIENT_ID}&scope=read:user user:email`;
 
     res.redirect(url);
 
 });
 
+/* GITHUB CALLBACK */
 
-/* ==========================================================================
-   GITHUB CALLBACK
-   ========================================================================== */
+app.get("/auth/github/callback", async(req,res)=>{
 
-app.get(
-    "/auth/github/callback",
+    const code = req.query.code;
 
-    async (req, res) => {
+    try{
 
-        const code =
-            req.query.code;
+        const tokenRes = await axios.post(
+            "https://github.com/login/oauth/access_token",
+            {
+                client_id:
+                process.env.GITHUB_CLIENT_ID,
 
+                client_secret:
+                process.env.GITHUB_CLIENT_SECRET,
 
-        if (!code) {
+                code:code
+            },
+            {
+                headers:{
+                    Accept:"application/json"
+                }
+            }
+        );
 
-            return res.status(400).send(
+        const accessToken =
+        tokenRes.data.access_token;
 
-                "Missing GitHub authorization code."
+        const userRes = await axios.get(
+            "https://api.github.com/user",
+            {
+                headers:{
+                    Authorization:
+                    `Bearer ${accessToken}`
+                }
+            }
+        );
 
-            );
+        const user = userRes.data;
 
-        }
+        res.redirect(
+`https://riglify.github.io/?github=${encodeURIComponent(user.login)}&avatar=${encodeURIComponent(user.avatar_url)}`
+        );
 
+    }catch(err){
 
-        try {
+        console.log(
+            err.response?.data || err.message
+        );
 
-            const tokenRes =
-                await axios.post(
-
-                    "https://github.com/login/oauth/access_token",
-
-                    {
-
-                        client_id:
-                            process.env.GITHUB_CLIENT_ID,
-
-                        client_secret:
-                            process.env.GITHUB_CLIENT_SECRET,
-
-                        code: code
-
-                    },
-
-                    {
-
-                        headers: {
-
-                            Accept:
-                                "application/json"
-
-                        }
-
-                    }
-
-                );
-
-
-            const accessToken =
-                tokenRes.data.access_token;
-
-
-            const userRes =
-                await axios.get(
-
-                    "https://api.github.com/user",
-
-                    {
-
-                        headers: {
-
-                            Authorization:
-                                `Bearer ${accessToken}`
-
-                        }
-
-                    }
-
-                );
-
-
-            const user =
-                userRes.data;
-
-
-            res.redirect(
-
-                `https://riglify.github.io/` +
-
-                `?github=${encodeURIComponent(user.login)}` +
-
-                `&avatar=${encodeURIComponent(user.avatar_url)}`
-
-            );
-
-
-        } catch (err) {
-
-            console.error(
-
-                "GITHUB OAUTH ERROR:",
-
-                err.response?.data ||
-                err.message
-
-            );
-
-
-            res.status(500).send(
-
-                "GitHub login failed."
-
-            );
-
-        }
+        res.send("GitHub OAuth failed.");
 
     }
-
-);
-
-
-/* ==========================================================================
-   HEALTH CHECK
-   ========================================================================== */
-
-app.get("/", (req, res) => {
-
-    res.json({
-
-        success: true,
-
-        service:
-            "Riglify Backend",
-
-        status:
-            "Online"
-
-    });
 
 });
 
 
-/* ==========================================================================
-   START SERVER
-   ========================================================================== */
 
-const PORT =
-    process.env.PORT || 10000;
+/* START SERVER */
 
+const PORT = process.env.PORT || 10000;
 
-app.listen(
-
-    PORT,
-
-    () => {
-
-        console.log(
-
-            `Riglify server running on port ${PORT}`
-
-        );
-
-    }
-
-);
-
-
-
-// RIGLIFY BACKEND - COPYRIGHT © 2026 BY NOTHINGBUTTYLER.
-// ALL RIGHTS RESERVED.
+app.listen(PORT, () => {
+    console.log("Server running");
+});
