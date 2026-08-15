@@ -737,16 +737,9 @@ app.get('/download/:id', async (req, res) => {
     const assetId = String(req.params.id || "").trim();
     const targetUserId = String(req.query.userId || "").trim();
 
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET');
+    res.setHeader("Access-Control-Allow-Origin", "*");
 
     try {
-
-        /*
-        ============================================================
-        BASIC VALIDATION
-        ============================================================
-        */
 
         if (!assetId) {
             return res.status(400).json({
@@ -793,7 +786,7 @@ app.get('/download/:id', async (req, res) => {
 
             /*
             ========================================================
-            GET ROBLOX USER INFORMATION DIRECTLY FROM USER ID
+            GET ROBLOX USER
             ========================================================
             */
 
@@ -801,9 +794,7 @@ app.get('/download/:id', async (req, res) => {
                 `https://users.roblox.com/v1/users/${encodeURIComponent(targetUserId)}`
             );
 
-
             const userData = userResponse.data;
-
 
             if (!userData || !userData.id) {
                 throw new Error(
@@ -811,235 +802,570 @@ app.get('/download/:id', async (req, res) => {
                 );
             }
 
-
             const username =
-                userData.name || `User_${targetUserId}`;
+                userData.name ||
+                `User_${targetUserId}`;
 
 
             /*
             ========================================================
-            GET CURRENTLY WORN ASSETS
+            REAL GLB EXPORT
             ========================================================
             */
 
-            let wornAssets = [];
+            if (
+                assetId === "all_glb" ||
+                assetId === "blender_glb"
+            ) {
 
-
-            try {
-
-                const avatarResponse = await axios.get(
-                    `https://avatar.roblox.com/v1/users/${encodeURIComponent(targetUserId)}/currently-wearing`
+                console.log(
+                    `Requesting Roblox 3D avatar for ${username}`
                 );
 
 
-                wornAssets =
-                    avatarResponse.data?.assetIds || [];
+                /*
+                Roblox's Avatar 3D endpoint returns an object
+                containing an imageUrl pointing to Roblox's
+                generated 3D avatar data.
+                */
+
+                const avatar3DResponse =
+                    await axios.get(
+                        "https://thumbnails.roblox.com/v1/users/avatar-3d",
+                        {
+                            params: {
+                                userId:
+                                    targetUserId
+                            },
+
+                            headers: {
+                                "User-Agent":
+                                    "Riglify/1.0"
+                            },
+
+                            timeout:
+                                30000
+                        }
+                    );
 
 
-            } catch (avatarError) {
+                const avatar3D =
+                    avatar3DResponse.data;
 
-                console.error(
-                    "Could not retrieve worn assets:",
-                    avatarError.response?.data ||
-                    avatarError.message
+
+                console.log(
+                    "Roblox Avatar 3D response:",
+                    JSON.stringify(
+                        avatar3D,
+                        null,
+                        2
+                    )
+                );
+
+
+                const imageUrl =
+                    avatar3D?.imageUrl;
+
+
+                if (!imageUrl) {
+
+                    throw new Error(
+                        "Roblox did not return a 3D avatar URL."
+                    );
+
+                }
+
+
+                /*
+                ----------------------------------------------------
+                DOWNLOAD ROBLOX'S GENERATED 3D AVATAR DATA
+                ----------------------------------------------------
+                */
+
+                const modelResponse =
+                    await axios.get(
+                        imageUrl,
+                        {
+                            responseType:
+                                "arraybuffer",
+
+                            timeout:
+                                30000,
+
+                            headers: {
+                                "User-Agent":
+                                    "Riglify/1.0"
+                            }
+                        }
+                    );
+
+
+                if (
+                    !modelResponse.data ||
+                    modelResponse.data.length === 0
+                ) {
+
+                    throw new Error(
+                        "Roblox returned an empty 3D avatar."
+                    );
+
+                }
+
+
+                /*
+                ----------------------------------------------------
+                SEND THE GENERATED MODEL
+                ----------------------------------------------------
+                */
+
+                res.setHeader(
+                    "Content-Type",
+                    "model/gltf-binary"
+                );
+
+                res.setHeader(
+                    "Content-Disposition",
+                    `attachment; filename="Riglify_${username}.glb"`
+                );
+
+                res.setHeader(
+                    "Content-Length",
+                    modelResponse.data.length
+                );
+
+
+                return res.send(
+                    modelResponse.data
                 );
 
             }
 
 
-            console.log(
-                `Found ${wornAssets.length} worn assets for ${username}`
-            );
+            /*
+            ========================================================
+            REAL OBJ EXPORT
+            ========================================================
+            */
 
-/*
-========================================================
-CREATE REAL OBJ EXPORT
-========================================================
-*/
+            if (assetId === "all_obj") {
 
-if (assetId === "all_obj") {
+                const avatar3DResponse =
+                    await axios.get(
+                        "https://thumbnails.roblox.com/v1/users/avatar-3d",
+                        {
+                            params: {
+                                userId:
+                                    targetUserId
+                            },
 
-    /*
-    ----------------------------------------------------
-    GET THE USER'S AVATAR DATA
-    ----------------------------------------------------
-    */
+                            headers: {
+                                "User-Agent":
+                                    "Riglify/1.0"
+                            },
 
-    const avatarDetailsResponse =
-        await axios.get(
-            `https://avatar.roblox.com/v1/users/${encodeURIComponent(targetUserId)}/avatar`
-        );
-
-    const avatarDetails =
-        avatarDetailsResponse.data;
-
-
-    /*
-    ----------------------------------------------------
-    GET CURRENTLY WORN ASSETS
-    ----------------------------------------------------
-    */
-
-    const wornAssets =
-        avatarDetails?.assets ||
-        [];
+                            timeout:
+                                30000
+                        }
+                    );
 
 
-    console.log(
-        "Avatar assets:",
-        JSON.stringify(
-            wornAssets,
-            null,
-            2
-        )
-    );
+                const avatar3D =
+                    avatar3DResponse.data;
 
 
-    /*
-    ----------------------------------------------------
-    CREATE ZIP
-    ----------------------------------------------------
-    */
-
-    const archive =
-        archiver("zip", {
-            zlib: {
-                level: 9
-            }
-        });
+                const imageUrl =
+                    avatar3D?.imageUrl;
 
 
-    archive.on("error", (archiveError) => {
-
-        console.error(
-            "OBJ archive error:",
-            archiveError
-        );
-
-        if (!res.headersSent) {
-
-            res.status(500).json({
-                success: false,
-                error: archiveError.message
-            });
-
-        } else {
-
-            res.destroy(
-                archiveError
-            );
-
-        }
-
-    });
+                if (!imageUrl) {
+                    throw new Error(
+                        "Roblox did not return the avatar 3D data URL."
+                    );
+                }
 
 
-    /*
-    ----------------------------------------------------
-    RESPONSE
-    ----------------------------------------------------
-    */
+                /*
+                ----------------------------------------------------
+                DOWNLOAD AVATAR 3D DATA
+                ----------------------------------------------------
+                */
 
-    res.setHeader(
-        "Content-Type",
-        "application/zip"
-    );
+                const modelResponse =
+                    await axios.get(
+                        imageUrl,
+                        {
+                            responseType:
+                                "json",
 
-    res.setHeader(
-        "Content-Disposition",
-        `attachment; filename="Riglify_${username}_obj.zip"`
-    );
+                            timeout:
+                                30000,
+
+                            headers: {
+                                "User-Agent":
+                                    "Riglify/1.0"
+                            }
+                        }
+                    );
 
 
-    archive.pipe(res);
+                const modelData =
+                    modelResponse.data;
 
 
-    /*
-    ----------------------------------------------------
-    EXPORT INFORMATION
-    ----------------------------------------------------
-    */
+                /*
+                ----------------------------------------------------
+                GET OBJ / MTL HASHES
+                ----------------------------------------------------
+                */
 
-    const exportInfo = `
-RIGLIFY OBJ AVATAR EXPORT
-=========================
+                if (
+                    !modelData ||
+                    !modelData.obj
+                ) {
+
+                    throw new Error(
+                        "Roblox did not return OBJ avatar data."
+                    );
+
+                }
+
+
+                function robloxCdnUrl(hash) {
+
+                    let value =
+                        31;
+
+                    for (
+                        let i = 0;
+                        i < Math.min(
+                            38,
+                            hash.length
+                        );
+                        i++
+                    ) {
+
+                        value ^=
+                            hash
+                                .charCodeAt(i);
+
+                    }
+
+
+                    const server =
+                        ((value % 8) + 8) % 8;
+
+
+                    return `https://t${server}.rbxcdn.com/${hash}`;
+
+                }
+
+
+                const objUrl =
+                    robloxCdnUrl(
+                        modelData.obj
+                    );
+
+
+                const objResponse =
+                    await axios.get(
+                        objUrl,
+                        {
+                            responseType:
+                                "text",
+
+                            timeout:
+                                30000,
+
+                            headers: {
+                                "User-Agent":
+                                    "Riglify/1.0"
+                            }
+                        }
+                    );
+
+
+                let mtlText =
+                    "";
+
+
+                if (modelData.mtl) {
+
+                    const mtlUrl =
+                        robloxCdnUrl(
+                            modelData.mtl
+                        );
+
+
+                    const mtlResponse =
+                        await axios.get(
+                            mtlUrl,
+                            {
+                                responseType:
+                                    "text",
+
+                                timeout:
+                                    30000,
+
+                                headers: {
+                                    "User-Agent":
+                                        "Riglify/1.0"
+                                }
+                            }
+                        );
+
+
+                    mtlText =
+                        mtlResponse.data || "";
+
+                }
+
+
+                /*
+                ----------------------------------------------------
+                CREATE OBJ ZIP
+                ----------------------------------------------------
+                */
+
+                const archive =
+                    archiver(
+                        "zip",
+                        {
+                            zlib: {
+                                level: 9
+                            }
+                        }
+                    );
+
+
+                archive.on(
+                    "error",
+                    (archiveError) => {
+
+                        console.error(
+                            "OBJ archive error:",
+                            archiveError
+                        );
+
+                        if (
+                            !res.headersSent
+                        ) {
+
+                            res.status(500).json({
+                                success: false,
+                                error:
+                                    archiveError.message
+                            });
+
+                        } else {
+
+                            res.destroy(
+                                archiveError
+                            );
+
+                        }
+
+                    }
+                );
+
+
+                res.setHeader(
+                    "Content-Type",
+                    "application/zip"
+                );
+
+                res.setHeader(
+                    "Content-Disposition",
+                    `attachment; filename="Riglify_${username}_obj.zip"`
+                );
+
+
+                archive.pipe(res);
+
+
+                archive.append(
+                    objResponse.data,
+                    {
+                        name:
+                            `${username}.obj`
+                    }
+                );
+
+
+                if (mtlText) {
+
+                    archive.append(
+                        mtlText,
+                        {
+                            name:
+                                `${username}.mtl`
+                        }
+                    );
+
+                }
+
+
+                archive.append(
+                    `
+RIGLIFY OBJ EXPORT
 
 Username: ${username}
 User ID: ${targetUserId}
 
-Asset Count: ${wornAssets.length}
-
-Generated by Riglify
-https://riglify.github.io
-
-`;
-
-    archive.append(
-        exportInfo,
-        {
-            name:
-                "Riglify_Export_Info.txt"
-        }
-    );
+Generated by Riglify.
+`,
+                    {
+                        name:
+                            "Riglify_Export_Info.txt"
+                    }
+                );
 
 
-    /*
-    ----------------------------------------------------
-    ASSET MANIFEST
-    ----------------------------------------------------
-    */
-
-    const assetManifest =
-        wornAssets
-            .map(asset => {
-
-                return [
-                    `Name: ${asset.name || "Unknown"}`,
-                    `Asset ID: ${asset.id}`,
-                    `Asset Type: ${asset.assetType || "Unknown"}`,
-                    ""
-                ].join("\n");
-
-            })
-            .join("\n");
+                await archive.finalize();
 
 
-    archive.append(
-        assetManifest ||
-        "No avatar assets were returned.",
-        {
-            name:
-                "Riglify_Asset_Manifest.txt"
-        }
-    );
+                console.log(
+                    `OBJ export completed for ${username}`
+                );
 
 
-    /*
-    ----------------------------------------------------
-    IMPORTANT:
-    DO NOT CALL archive.append() WITH FAKE OBJ DATA.
-    ----------------------------------------------------
-    */
+                return;
+
+            }
 
 
-    await archive.finalize();
+            /*
+            ========================================================
+            OTHER FORMATS
+            ========================================================
+            */
+
+            const formatMap = {
+
+                all_rbxm: [
+                    "RBXM",
+                    "rbxm"
+                ],
+
+                unity_fbx: [
+                    "Unity FBX",
+                    "fbx"
+                ],
+
+                unreal_fbx: [
+                    "Unreal FBX",
+                    "fbx"
+                ],
+
+                maya_obj: [
+                    "Maya OBJ",
+                    "obj"
+                ],
+
+                c4d_dae: [
+                    "Cinema4D DAE",
+                    "dae"
+                ],
+
+                all_ply: [
+                    "PLY",
+                    "ply"
+                ],
+
+                all_stl: [
+                    "STL",
+                    "stl"
+                ]
+
+            };
 
 
-    console.log(
-        `OBJ export package created for ${username}`
-    );
+            const format =
+                formatMap[assetId];
 
 
-    return;
+            if (format) {
 
-}
+                const archive =
+                    archiver(
+                        "zip",
+                        {
+                            zlib: {
+                                level: 9
+                            }
+                        }
+                    );
 
 
-            console.log(
-                `Export completed for ${username} (${formatName})`
-            );
+                archive.on(
+                    "error",
+                    (archiveError) => {
 
-            return;
+                        console.error(
+                            "Export archive error:",
+                            archiveError
+                        );
+
+                        if (
+                            !res.headersSent
+                        ) {
+
+                            res.status(500).json({
+                                success: false,
+                                error:
+                                    archiveError.message
+                            });
+
+                        } else {
+
+                            res.destroy(
+                                archiveError
+                            );
+
+                        }
+
+                    }
+                );
+
+
+                res.setHeader(
+                    "Content-Type",
+                    "application/zip"
+                );
+
+                res.setHeader(
+                    "Content-Disposition",
+                    `attachment; filename="Riglify_${username}_${assetId}.zip"`
+                );
+
+
+                archive.pipe(res);
+
+
+                archive.append(
+                    `
+RIGLIFY AVATAR EXPORT
+
+Username: ${username}
+User ID: ${targetUserId}
+
+Format: ${format[0]}
+
+This format is not yet supported by
+the current Roblox avatar export API.
+`,
+                    {
+                        name:
+                            "Riglify_Export_Info.txt"
+                    }
+                );
+
+
+                await archive.finalize();
+
+                return;
+
+            }
+
         }
 
 
@@ -1049,77 +1375,52 @@ https://riglify.github.io
         ============================================================
         */
 
+        if (!/^\d+$/.test(assetId)) {
+
+            return res.status(400).json({
+                success: false,
+                error:
+                    "Invalid Roblox asset ID."
+            });
+
+        }
+
+
         console.log(
             "Downloading individual Roblox asset:",
             assetId
         );
 
 
-        /*
-        ========================================================
-        VALIDATE ASSET ID
-        ========================================================
-        */
-
-        if (!/^\d+$/.test(assetId)) {
-
-            return res.status(400).json({
-                success: false,
-                error: "Invalid Roblox asset ID."
-            });
-
-        }
-
-
-        /*
-        ========================================================
-        ROBLOX ASSET DELIVERY
-        ========================================================
-        */
-
         const assetUrl =
             `https://assetdelivery.roproxy.com/v1/asset/?id=${encodeURIComponent(assetId)}`;
 
 
-        console.log(
-            "Download URL:",
-            assetUrl
-        );
+        const assetRes =
+            await axios.get(
+                assetUrl,
+                {
+                    responseType:
+                        "arraybuffer",
 
+                    timeout:
+                        30000,
 
-        const assetRes = await axios.get(
-            assetUrl,
-            {
-                responseType: "arraybuffer",
+                    headers: {
+                        "User-Agent":
+                            "Mozilla/5.0"
+                    },
 
-                timeout: 30000,
+                    validateStatus:
+                        () => true
+                }
+            );
 
-                headers: {
-                    "User-Agent":
-                        "Mozilla/5.0"
-                },
-
-                validateStatus: () => true
-            }
-        );
-
-
-        /*
-        ========================================================
-        CHECK ROBLOX RESPONSE
-        ========================================================
-        */
 
         if (
             assetRes.status < 200 ||
             assetRes.status >= 300
         ) {
-
-            console.error(
-                "Roblox asset delivery failed:",
-                assetRes.status
-            );
-
 
             return res.status(502).json({
                 success: false,
@@ -1129,12 +1430,6 @@ https://riglify.github.io
 
         }
 
-
-        /*
-        ========================================================
-        CHECK EMPTY RESPONSE
-        ========================================================
-        */
 
         if (
             !assetRes.data ||
@@ -1149,12 +1444,6 @@ https://riglify.github.io
 
         }
 
-
-        /*
-        ========================================================
-        SEND ASSET
-        ========================================================
-        */
 
         res.setHeader(
             "Content-Type",
@@ -1172,16 +1461,12 @@ https://riglify.github.io
         );
 
 
-        return res.send(assetRes.data);
+        return res.send(
+            assetRes.data
+        );
 
 
     } catch (err) {
-
-        /*
-        ============================================================
-        ERROR HANDLING
-        ============================================================
-        */
 
         console.error(
             "========== RIGLIFY DOWNLOAD FAILURE =========="
@@ -1213,13 +1498,9 @@ https://riglify.github.io
         );
 
 
-        /*
-        ========================================================
-        TIMEOUT
-        ========================================================
-        */
-
-        if (err.code === "ECONNABORTED") {
+        if (
+            err.code === "ECONNABORTED"
+        ) {
 
             return res.status(504).json({
                 success: false,
@@ -1230,13 +1511,9 @@ https://riglify.github.io
         }
 
 
-        /*
-        ========================================================
-        NORMAL ERROR
-        ========================================================
-        */
-
-        if (!res.headersSent) {
+        if (
+            !res.headersSent
+        ) {
 
             return res.status(500).json({
                 success: false,
@@ -1247,12 +1524,6 @@ https://riglify.github.io
 
         }
 
-
-        /*
-        ========================================================
-        RESPONSE ALREADY STARTED
-        ========================================================
-        */
 
         res.destroy(err);
 
