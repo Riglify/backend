@@ -851,206 +851,188 @@ app.get('/download/:id', async (req, res) => {
                 `Found ${wornAssets.length} worn assets for ${username}`
             );
 
+/*
+========================================================
+CREATE REAL OBJ EXPORT
+========================================================
+*/
 
-            /*
-            ========================================================
-            CREATE ZIP
-            ========================================================
-            */
+if (assetId === "all_obj") {
 
-            const archive = archiver("zip", {
-                zlib: {
-                    level: 9
-                }
-            });
+    /*
+    ----------------------------------------------------
+    GET THE USER'S AVATAR DATA
+    ----------------------------------------------------
+    */
 
+    const avatarDetailsResponse =
+        await axios.get(
+            `https://avatar.roblox.com/v1/users/${encodeURIComponent(targetUserId)}/avatar`
+        );
 
-            archive.on("error", (archiveError) => {
-
-                console.error(
-                    "Archive error:",
-                    archiveError
-                );
-
-                if (!res.headersSent) {
-
-                    res.status(500).json({
-                        success: false,
-                        error: archiveError.message
-                    });
-
-                } else {
-
-                    res.destroy(archiveError);
-
-                }
-
-            });
+    const avatarDetails =
+        avatarDetailsResponse.data;
 
 
-            /*
-            ========================================================
-            DETERMINE REQUESTED FORMAT
-            ========================================================
-            */
+    /*
+    ----------------------------------------------------
+    GET CURRENTLY WORN ASSETS
+    ----------------------------------------------------
+    */
 
-            let formatName = "Unknown";
-            let extension = "txt";
+    const wornAssets =
+        avatarDetails?.assets ||
+        [];
 
 
-            switch (assetId) {
+    console.log(
+        "Avatar assets:",
+        JSON.stringify(
+            wornAssets,
+            null,
+            2
+        )
+    );
 
-                case "all_obj":
-                    formatName = "OBJ";
-                    extension = "obj";
-                    break;
 
-                case "all_glb":
-                    formatName = "GLB";
-                    extension = "glb";
-                    break;
+    /*
+    ----------------------------------------------------
+    CREATE ZIP
+    ----------------------------------------------------
+    */
 
-                case "all_rbxm":
-                    formatName = "RBXM";
-                    extension = "rbxm";
-                    break;
-
-                case "unity_fbx":
-                    formatName = "Unity FBX";
-                    extension = "fbx";
-                    break;
-
-                case "unreal_fbx":
-                    formatName = "Unreal Engine FBX";
-                    extension = "fbx";
-                    break;
-
-                case "blender_glb":
-                    formatName = "Blender GLB";
-                    extension = "glb";
-                    break;
-
-                case "maya_obj":
-                    formatName = "Maya OBJ";
-                    extension = "obj";
-                    break;
-
-                case "c4d_dae":
-                    formatName = "Cinema4D DAE";
-                    extension = "dae";
-                    break;
-
-                case "all_ply":
-                    formatName = "PLY";
-                    extension = "ply";
-                    break;
-
-                case "all_stl":
-                    formatName = "STL";
-                    extension = "stl";
-                    break;
-
+    const archive =
+        archiver("zip", {
+            zlib: {
+                level: 9
             }
+        });
 
 
-            /*
-            ========================================================
-            RESPONSE HEADERS
-            ========================================================
-            */
+    archive.on("error", (archiveError) => {
 
-            res.setHeader(
-                "Content-Type",
-                "application/zip"
+        console.error(
+            "OBJ archive error:",
+            archiveError
+        );
+
+        if (!res.headersSent) {
+
+            res.status(500).json({
+                success: false,
+                error: archiveError.message
+            });
+
+        } else {
+
+            res.destroy(
+                archiveError
             );
 
-            res.setHeader(
-                "Content-Disposition",
-                `attachment; filename="Riglify_${username}_${assetId}.zip"`
-            );
+        }
+
+    });
 
 
-            archive.pipe(res);
+    /*
+    ----------------------------------------------------
+    RESPONSE
+    ----------------------------------------------------
+    */
+
+    res.setHeader(
+        "Content-Type",
+        "application/zip"
+    );
+
+    res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="Riglify_${username}_obj.zip"`
+    );
 
 
-            /*
-            ========================================================
-            EXPORT INFORMATION
-            ========================================================
-            */
+    archive.pipe(res);
 
-            const exportInfo = `
-RIGLIFY AVATAR EXPORT
-=====================
+
+    /*
+    ----------------------------------------------------
+    EXPORT INFORMATION
+    ----------------------------------------------------
+    */
+
+    const exportInfo = `
+RIGLIFY OBJ AVATAR EXPORT
+=========================
 
 Username: ${username}
 User ID: ${targetUserId}
 
-Requested Format: ${formatName}
-File Extension: .${extension}
-
-Worn Assets: ${wornAssets.length}
+Asset Count: ${wornAssets.length}
 
 Generated by Riglify
 https://riglify.github.io
 
-NOTE:
-This export format is currently under development.
-The actual Roblox-to-${formatName} conversion system
-will be added in a future Riglify update.
 `;
 
-
-            archive.append(
-                exportInfo,
-                {
-                    name: "Riglify_Export_Info.txt"
-                }
-            );
-
-
-            /*
-            ========================================================
-            ASSET LIST
-            ========================================================
-            */
-
-            if (wornAssets.length > 0) {
-
-                const assetList =
-                    wornAssets
-                        .map(
-                            id => String(id)
-                        )
-                        .join("\n");
+    archive.append(
+        exportInfo,
+        {
+            name:
+                "Riglify_Export_Info.txt"
+        }
+    );
 
 
-                archive.append(
-                    assetList,
-                    {
-                        name: "Riglify_Asset_IDs.txt"
-                    }
-                );
+    /*
+    ----------------------------------------------------
+    ASSET MANIFEST
+    ----------------------------------------------------
+    */
 
-            } else {
+    const assetManifest =
+        wornAssets
+            .map(asset => {
 
-                archive.append(
-                    "No worn assets were found.",
-                    {
-                        name: "Riglify_Asset_IDs.txt"
-                    }
-                );
+                return [
+                    `Name: ${asset.name || "Unknown"}`,
+                    `Asset ID: ${asset.id}`,
+                    `Asset Type: ${asset.assetType || "Unknown"}`,
+                    ""
+                ].join("\n");
 
-            }
+            })
+            .join("\n");
 
 
-            /*
-            ========================================================
-            FINALIZE EXPORT
-            ========================================================
-            */
+    archive.append(
+        assetManifest ||
+        "No avatar assets were returned.",
+        {
+            name:
+                "Riglify_Asset_Manifest.txt"
+        }
+    );
 
-            await archive.finalize();
+
+    /*
+    ----------------------------------------------------
+    IMPORTANT:
+    DO NOT CALL archive.append() WITH FAKE OBJ DATA.
+    ----------------------------------------------------
+    */
+
+
+    await archive.finalize();
+
+
+    console.log(
+        `OBJ export package created for ${username}`
+    );
+
+
+    return;
+
+}
 
 
             console.log(
