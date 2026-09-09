@@ -1351,11 +1351,12 @@ if (unsupportedFormats.includes(assetId)) {
 
 
         return res.send(
-            assetRes.data
-        );
+    assetRes.data
+);
 
+}
 
-    } catch (err) {
+} catch (err) {
 
         console.error(
             "========== RIGLIFY DOWNLOAD FAILURE =========="
