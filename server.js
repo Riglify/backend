@@ -13,6 +13,7 @@ app.use(cors());
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
 const REDIRECT_URI = process.env.REDIRECT_URI;
+const ROBLOX_API_KEY = process.env.ROBLOX_API_KEY;
 
 
 
@@ -839,9 +840,11 @@ app.get('/download/:id', async (req, res) => {
                             },
 
                             headers: {
-                                "User-Agent":
-                                    "Riglify/1.0"
-                            },
+    "User-Agent":
+        "Riglify/1.0",
+    "x-api-key":
+        ROBLOX_API_KEY
+},
 
                             timeout:
                                 30000
@@ -959,9 +962,11 @@ app.get('/download/:id', async (req, res) => {
                             },
 
                             headers: {
-                                "User-Agent":
-                                    "Riglify/1.0"
-                            },
+    "User-Agent":
+        "Riglify/1.0",
+    "x-api-key":
+        ROBLOX_API_KEY
+},
 
                             timeout:
                                 30000
