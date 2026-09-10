@@ -1391,6 +1391,11 @@ if (unsupportedFormats.includes(assetId)) {
             "URL:",
             err.config?.url
         );
+    
+    console.log(
+    "Roblox API response:",
+    err.response?.data
+);
 
 
         if (
