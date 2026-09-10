@@ -21,6 +21,190 @@ console.log(
     ROBLOX_API_KEY?.length
 );
 
+const RIGLIFY_UNIVERSE_ID = "10765943302";
+const RIGLIFY_PLACE_ID = "114465018225131";
+
+async function runRbxmTest() {
+    const script = `
+local SerializationService = game:GetService("SerializationService")
+
+local model = Instance.new("Model")
+model.Name = "RiglifyRBXMTest"
+
+local part = Instance.new("Part")
+part.Name = "TestPart"
+part.Size = Vector3.new(4, 4, 4)
+part.Anchored = true
+part.Parent = model
+
+local serialized = SerializationService:SerializeInstancesAsync({ model })
+
+return serialized
+`;
+
+    const createResponse = await axios.post(
+        `https://apis.roblox.com/cloud/v2/universes/${RIGLIFY_UNIVERSE_ID}/places/${RIGLIFY_PLACE_ID}/luau-execution-session-tasks`,
+        {
+            script,
+            enableBinaryOutput: true,
+            timeout: "30s"
+        },
+        {
+            headers: {
+                "x-api-key": ROBLOX_API_KEY,
+                "Content-Type": "application/json"
+            },
+            timeout: 30000
+        }
+    );
+
+    let task = createResponse.data;
+
+    console.log("RBXM task created:", task.path);
+
+    while (
+        task.state === "QUEUED" ||
+        task.state === "PROCESSING"
+    ) {
+        await new Promise(resolve =>
+            setTimeout(resolve, 1500)
+        );
+
+        const taskResponse = await axios.get(
+            `https://apis.roblox.com/cloud/v2/${task.path}`,
+            {
+                headers: {
+                    "x-api-key": ROBLOX_API_KEY
+                },
+                timeout: 30000
+            }
+        );
+
+        task = taskResponse.data;
+    }
+
+    if (task.state !== "COMPLETE") {
+        throw new Error(
+            task.error?.message ||
+            `RBXM task failed with state ${task.state}`
+        );
+    }
+
+    if (!task.binaryOutputUri) {
+        throw new Error(
+            "Roblox completed the RBXM task but returned no binary output URI."
+        );
+    }
+
+    const binaryResponse = await axios.get(
+        task.binaryOutputUri,
+        {
+            responseType: "arraybuffer",
+            timeout: 30000
+        }
+    );
+
+    if (
+        !binaryResponse.data ||
+        binaryResponse.data.length === 0
+    ) {
+        throw new Error(
+            "Roblox returned an empty RBXM file."
+        );
+    }
+
+    return Buffer.from(binaryResponse.data);
+}
+
+
+
+
+app.get("/test-rbxm", async (req, res) => {
+    try {
+        const rbxm = await runRbxmTest();
+
+        res.setHeader("Content-Type", "model/x-rbxm");
+        res.setHeader(
+            "Content-Disposition",
+            'attachment; filename="Riglify_RBXM_Test.rbxm"'
+        );
+        res.setHeader("Content-Length", rbxm.length);
+
+        return res.send(rbxm);
+    } catch (err) {
+        console.error(
+            "RBXM TEST ERROR:",
+            err.response?.data || err.message
+        );
+
+        return res.status(500).json({
+            success: false,
+            error:
+                err.response?.data ||
+                err.message ||
+                "Unknown RBXM error"
+        });
+    }
+});
+
+
+
+
+
+const DOWNLOADABLE_AVATAR_ASSET_TYPES = new Set([
+    // Classic body
+    17, // Head
+    27, // Torso
+    28, // RightArm
+    29, // LeftArm
+    30, // LeftLeg
+    31, // RightLeg
+
+    // Rigid accessories
+    8,  // Hat
+    41, // HairAccessory
+    42, // FaceAccessory
+    43, // NeckAccessory
+    44, // ShoulderAccessory
+    45, // FrontAccessory
+    46, // BackAccessory
+    47, // WaistAccessory
+
+    // Layered/accessory types
+    64, // TShirtAccessory
+    65, // ShirtAccessory
+    66, // PantsAccessory
+    67, // JacketAccessory
+    68, // SweaterAccessory
+    69, // ShortsAccessory
+    70, // LeftShoeAccessory
+    71, // RightShoeAccessory
+    72, // DressSkirtAccessory
+    76, // EyebrowAccessory
+    77  // EyelashAccessory
+]);
+
+const BLOCKED_AVATAR_ASSET_TYPES = new Set([
+    2,  // TShirt
+    11, // Shirt
+    12, // Pants
+
+    // Animations
+    48, // Climb
+    50, // Fall
+    51, // Idle
+    52, // Jump
+    53, // Run
+    54, // Swim
+    55, // Walk
+    61, // Emote
+    78  // Mood
+]);
+
+const BLOCKED_AVATAR_ITEM_NAMES = new Set([
+    "DefaultFallBackMood"
+]);
+
 
 /* LOGIN */
 
@@ -628,6 +812,61 @@ try {
                     }
 
                 }
+                
+                /*
+============================================================
+FILTER NON-DOWNLOADABLE AVATAR ITEMS
+============================================================
+*/
+
+const normalizedType =
+    String(realType || "")
+        .toLowerCase()
+        .replace(/[\s_-]/g, "");
+
+const normalizedName =
+    String(realName || "")
+        .toLowerCase()
+        .replace(/[\s_-]/g, "");
+
+const blockedByName =
+    normalizedName === "defaultfallbackmood";
+
+const blockedByType =
+    BLOCKED_AVATAR_ASSET_TYPES.has(
+        Number(realType)
+    ) ||
+    normalizedType.includes("animation") ||
+    normalizedType.includes("shirt") ||
+    normalizedType.includes("pants") ||
+    normalizedType.includes("tshirt") ||
+    normalizedType.includes("mood");
+
+if (blockedByName || blockedByType) {
+    console.log(
+        `Skipping non-downloadable avatar item ${assetId}:`,
+        realName,
+        realType
+    );
+
+    return null;
+}
+
+const numericType = Number(realType);
+
+if (
+    !DOWNLOADABLE_AVATAR_ASSET_TYPES.has(
+        numericType
+    )
+) {
+    console.log(
+        `Skipping unknown avatar item ${assetId}:`,
+        realName,
+        realType
+    );
+
+    return null;
+}
 
 
                 /*
