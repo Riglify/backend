@@ -28,18 +28,40 @@ async function runRbxmTest() {
     const script = `
 local SerializationService = game:GetService("SerializationService")
 
+print("🟥 Riglify RBXM test starting...")
+
 local model = Instance.new("Model")
 model.Name = "RiglifyRBXMTest"
 
 local part = Instance.new("Part")
 part.Name = "TestPart"
 part.Size = Vector3.new(4, 4, 4)
+part.Position = Vector3.new(0, 5, 0)
 part.Anchored = true
 part.Parent = model
 
-local serialized = SerializationService:SerializeInstancesAsync({ model })
+local success, result = pcall(function()
+	return SerializationService:SerializeInstancesAsync({ model })
+end)
 
-return serialized
+if not success then
+	warn("❌ RBXM serialization failed:")
+	warn(result)
+	return
+end
+
+print("✅ RBXM serialization succeeded!")
+print("Buffer type:", typeof(result))
+print("Buffer length:", buffer.len(result))
+
+model:Destroy()
+
+print("🟢 Riglify RBXM test complete!")
+
+return {
+	BinaryOutput = result,
+	ReturnValues = { "RiglifyRBXMTest" },
+}
 `;
 
     const createResponse = await axios.post(
