@@ -992,6 +992,14 @@ if (
     return null;
 
 }
+                
+                console.log("❌ Asset filtered:", {
+    id: item?.id,
+    name: realName,
+    type: realType,
+    numericType,
+    normalizedType
+});
 
 
 /*
