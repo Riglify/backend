@@ -919,46 +919,48 @@ if (!Number.isFinite(numericType)) {
 
 /*
 ------------------------------------------------------------
-BODY PART FALLBACK TYPE
+BODY PART / SPECIAL ASSET TYPE DETECTION
 ------------------------------------------------------------
 */
 
+const lowerAssetName =
+    String(realName || "").toLowerCase();
+
 if (
-    realName.startsWith("Roblox Asset ") &&
-    imageUrl
+    lowerAssetName.includes("left leg")
 ) {
 
-    if (imageUrl.includes("LeftLeg")) {
+    numericType = 30;
 
-        realName = "Left Leg";
-        numericType = 30;
+} else if (
+    lowerAssetName.includes("right leg")
+) {
 
-    } else if (imageUrl.includes("RightLeg")) {
+    numericType = 31;
 
-        realName = "Right Leg";
-        numericType = 31;
+} else if (
+    lowerAssetName.includes("left arm")
+) {
 
-    } else if (imageUrl.includes("LeftArm")) {
+    numericType = 29;
 
-        realName = "Left Arm";
-        numericType = 29;
+} else if (
+    lowerAssetName.includes("right arm")
+) {
 
-    } else if (imageUrl.includes("RightArm")) {
+    numericType = 28;
 
-        realName = "Right Arm";
-        numericType = 28;
+} else if (
+    lowerAssetName.includes("torso")
+) {
 
-    } else if (imageUrl.includes("Torso")) {
+    numericType = 27;
 
-        realName = "Torso";
-        numericType = 27;
+} else if (
+    lowerAssetName.includes("head")
+) {
 
-    } else if (imageUrl.includes("DynamicHead")) {
-
-        realName = "Animated Head";
-        numericType = 17;
-
-    }
+    numericType = 17;
 
 }
 
@@ -994,7 +996,7 @@ if (
 }
                 
                 console.log("❌ Asset filtered:", {
-    id: item?.id,
+    id: assetId,
     name: realName,
     type: realType,
     numericType,
