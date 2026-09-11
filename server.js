@@ -572,10 +572,10 @@ try {
                             economyData.name;
 
                         realType =
-                            economyData.AssetClassName ||
-                            economyData.AssetTypeId ||
-                            realType;
-
+                     economyData.AssetTypeId ??
+                      economyData.AssetClassName ??
+                       realType;
+                        
                     }
 
                 } catch (economyError) {
@@ -835,15 +835,11 @@ try {
 
                 }
                 
-                /*
 /*
 ============================================================
 FILTER NON-DOWNLOADABLE AVATAR ITEMS
 ============================================================
 */
-
-// Keep the original numeric asset type for filtering
-const numericType = Number(realType);
 
 const normalizedType =
     String(realType || "")
@@ -855,43 +851,174 @@ const normalizedName =
         .toLowerCase()
         .replace(/[\s_-]/g, "");
 
+
+/*
+------------------------------------------------------------
+NORMALIZE ASSET TYPE
+------------------------------------------------------------
+*/
+
+let numericType = Number(realType);
+
+if (!Number.isFinite(numericType)) {
+
+    const typeNameMap = {
+
+        tshirt: 2,
+
+        head: 17,
+        torso: 27,
+        rightarm: 28,
+        leftarm: 29,
+        leftleg: 30,
+        rightleg: 31,
+
+        hat: 8,
+
+        hairaccessory: 41,
+        faceaccessory: 42,
+        neckaccessory: 43,
+        shoulderaccessory: 44,
+        frontaccessory: 45,
+        backaccessory: 46,
+        waistaccessory: 47,
+
+        tshirtaccessory: 64,
+        shirtaccessory: 65,
+        pantsaccessory: 66,
+        jacketaccessory: 67,
+        sweateraccessory: 68,
+        shortsaccessory: 69,
+        leftshoeaccessory: 70,
+        rightshoeaccessory: 71,
+        dressskirtaccessory: 72,
+
+        eyebrowaccessory: 76,
+        eyelashaccessory: 77,
+
+        shirt: 11,
+        pants: 12,
+
+        climb: 48,
+        fall: 50,
+        idle: 51,
+        jump: 52,
+        run: 53,
+        swim: 54,
+        walk: 55,
+        emote: 61,
+        mood: 78
+
+    };
+
+    numericType =
+        typeNameMap[normalizedType];
+
+}
+
+
+/*
+------------------------------------------------------------
+BODY PART FALLBACK TYPE
+------------------------------------------------------------
+*/
+
+if (
+    realName.startsWith("Roblox Asset ") &&
+    imageUrl
+) {
+
+    if (imageUrl.includes("LeftLeg")) {
+
+        realName = "Left Leg";
+        numericType = 30;
+
+    } else if (imageUrl.includes("RightLeg")) {
+
+        realName = "Right Leg";
+        numericType = 31;
+
+    } else if (imageUrl.includes("LeftArm")) {
+
+        realName = "Left Arm";
+        numericType = 29;
+
+    } else if (imageUrl.includes("RightArm")) {
+
+        realName = "Right Arm";
+        numericType = 28;
+
+    } else if (imageUrl.includes("Torso")) {
+
+        realName = "Torso";
+        numericType = 27;
+
+    } else if (imageUrl.includes("DynamicHead")) {
+
+        realName = "Animated Head";
+        numericType = 17;
+
+    }
+
+}
+
+
+/*
+------------------------------------------------------------
+BLOCK UNWANTED ITEMS
+------------------------------------------------------------
+*/
+
 const blockedByName =
     normalizedName === "defaultfallbackmood";
 
 const blockedByType =
     BLOCKED_AVATAR_ASSET_TYPES.has(numericType) ||
     normalizedType.includes("animation") ||
-    normalizedType.includes("shirt") ||
-    normalizedType.includes("pants") ||
-    normalizedType.includes("tshirt") ||
     normalizedType.includes("mood");
 
-if (blockedByName || blockedByType) {
+if (
+    blockedByName ||
+    blockedByType
+) {
 
     console.log(
         `Skipping non-downloadable avatar item ${assetId}:`,
         realName,
-        realType
+        realType,
+        numericType
     );
 
     return null;
+
 }
 
-// Only allow asset types Riglify can actually download
-if (!DOWNLOADABLE_AVATAR_ASSET_TYPES.has(numericType)) {
-
-    console.log(
-        `Skipping unsupported avatar item ${assetId}:`,
-        realName,
-        realType
-    );
-
-    return null;
-}
 
 /*
 ------------------------------------------------------------
-CONVERT NUMERIC TYPE TO READABLE NAME
+ALLOW DOWNLOADABLE TYPES
+------------------------------------------------------------
+*/
+
+if (
+    !DOWNLOADABLE_AVATAR_ASSET_TYPES.has(numericType)
+) {
+
+    console.log(
+        `Skipping unknown avatar item ${assetId}:`,
+        realName,
+        realType,
+        numericType
+    );
+
+    return null;
+
+}
+
+
+/*
+------------------------------------------------------------
+CONVERT TYPE TO DISPLAY NAME
 ------------------------------------------------------------
 */
 
@@ -902,61 +1029,43 @@ const typeMap = {
     17: "Head",
 
     27: "Torso",
-
     28: "RightArm",
-
     29: "LeftArm",
-
     30: "LeftLeg",
-
     31: "RightLeg",
 
     41: "HairAccessory",
-
     42: "FaceAccessory",
-
     43: "NeckAccessory",
-
     44: "ShoulderAccessory",
-
     45: "FrontAccessory",
-
     46: "BackAccessory",
-
     47: "WaistAccessory",
 
     64: "TShirtAccessory",
-
     65: "ShirtAccessory",
-
     66: "PantsAccessory",
-
     67: "JacketAccessory",
-
     68: "SweaterAccessory",
-
     69: "ShortsAccessory",
-
     70: "LeftShoeAccessory",
-
     71: "RightShoeAccessory",
-
     72: "DressSkirtAccessory",
 
     76: "EyebrowAccessory",
-
     77: "EyelashAccessory"
 
 };
 
 const displayType =
-    typeMap[numericType] || "Accessory";
+    typeMap[numericType] ||
+    "Accessory";
 
 
 /*
-------------------------------------------------------------
+============================================================
 RETURN ASSET
-------------------------------------------------------------
+============================================================
 */
 
 return {
@@ -993,55 +1102,52 @@ return {
 
 }
 
-        /*
-        ============================================================
-        SEND AVATAR DATA
-        ============================================================
-        */
 
-        return res.json({
+/*
+============================================================
+SEND AVATAR DATA
+============================================================
+*/
 
-            success:
-                true,
+return res.json({
 
-            userId:
-                userId,
+    success:
+        true,
 
-            username:
-                username,
+    userId:
+        userId,
 
-            thumbnail:
-                thumbnail,
+    username:
+        username,
 
-            assets:
-                assets
+    thumbnail:
+        thumbnail,
 
-        });
+    assets:
+        assets
 
-
-    } catch (err) {
-
-        console.error(
-
-            "AVATAR FETCH ERROR:",
-
-            err.response?.data ||
-            err.message
-
-        );
+});
 
 
-        return res.status(500).json({
+} catch (err) {
 
-            success:
-                false,
+    console.error(
+        "AVATAR FETCH ERROR:",
+        err.response?.data ||
+        err.message
+    );
 
-            error:
-                "Failed to retrieve Roblox avatar."
+    return res.status(500).json({
 
-        });
+        success:
+            false,
 
-    }
+        error:
+            "Failed to retrieve Roblox avatar."
+
+    });
+
+}
 
 });
 
