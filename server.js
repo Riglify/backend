@@ -836,10 +836,14 @@ try {
                 }
                 
                 /*
+/*
 ============================================================
 FILTER NON-DOWNLOADABLE AVATAR ITEMS
 ============================================================
 */
+
+// Keep the original numeric asset type for filtering
+const numericType = Number(realType);
 
 const normalizedType =
     String(realType || "")
@@ -855,9 +859,7 @@ const blockedByName =
     normalizedName === "defaultfallbackmood";
 
 const blockedByType =
-    BLOCKED_AVATAR_ASSET_TYPES.has(
-        Number(realType)
-    ) ||
+    BLOCKED_AVATAR_ASSET_TYPES.has(numericType) ||
     normalizedType.includes("animation") ||
     normalizedType.includes("shirt") ||
     normalizedType.includes("pants") ||
@@ -865,6 +867,7 @@ const blockedByType =
     normalizedType.includes("mood");
 
 if (blockedByName || blockedByType) {
+
     console.log(
         `Skipping non-downloadable avatar item ${assetId}:`,
         realName,
@@ -874,15 +877,11 @@ if (blockedByName || blockedByType) {
     return null;
 }
 
-const numericType = Number(realType);
+// Only allow asset types Riglify can actually download
+if (!DOWNLOADABLE_AVATAR_ASSET_TYPES.has(numericType)) {
 
-if (
-    !DOWNLOADABLE_AVATAR_ASSET_TYPES.has(
-        numericType
-    )
-) {
     console.log(
-        `Skipping unknown avatar item ${assetId}:`,
+        `Skipping unsupported avatar item ${assetId}:`,
         realName,
         realType
     );
@@ -890,48 +889,99 @@ if (
     return null;
 }
 
+/*
+------------------------------------------------------------
+CONVERT NUMERIC TYPE TO READABLE NAME
+------------------------------------------------------------
+*/
 
-                /*
-                ------------------------------------------------
-                RETURN FINAL ASSET DATA
-                ------------------------------------------------
-                */
+const typeMap = {
 
-                return {
+    8: "Hat",
 
-                    id:
-                        String(assetId),
+    17: "Head",
 
-                    name:
-                        realName,
+    27: "Torso",
 
-                    image:
-                        imageUrl,
+    28: "RightArm",
 
-                    thumbnailState:
-                        "Ready",
+    29: "LeftArm",
 
-                    assetType:
-                        realType
+    30: "LeftLeg",
 
-                };
+    31: "RightLeg",
+
+    41: "HairAccessory",
+
+    42: "FaceAccessory",
+
+    43: "NeckAccessory",
+
+    44: "ShoulderAccessory",
+
+    45: "FrontAccessory",
+
+    46: "BackAccessory",
+
+    47: "WaistAccessory",
+
+    64: "TShirtAccessory",
+
+    65: "ShirtAccessory",
+
+    66: "PantsAccessory",
+
+    67: "JacketAccessory",
+
+    68: "SweaterAccessory",
+
+    69: "ShortsAccessory",
+
+    70: "LeftShoeAccessory",
+
+    71: "RightShoeAccessory",
+
+    72: "DressSkirtAccessory",
+
+    76: "EyebrowAccessory",
+
+    77: "EyelashAccessory"
+
+};
+
+const displayType =
+    typeMap[numericType] || "Accessory";
+
+
+/*
+------------------------------------------------------------
+RETURN ASSET
+------------------------------------------------------------
+*/
+
+return {
+
+    id:
+        String(assetId),
+
+    name:
+        realName,
+
+    image:
+        imageUrl,
+
+    thumbnailState:
+        "Ready",
+
+    assetType:
+        displayType
+
+};
 
             })
-
         );
 
     }
-
-
-    console.log(
-        "Final assets sent to Riglify:",
-        JSON.stringify(
-            assets,
-            null,
-            2
-        )
-    );
-
 
 } catch (assetError) {
 
