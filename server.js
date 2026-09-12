@@ -139,6 +139,188 @@ return {
 }
 
 
+async function runRbxmAssetTest(assetId) {
+    const script = `
+local InsertService = game:GetService("InsertService")
+local SerializationService = game:GetService("SerializationService")
+
+print("🟥 Riglify RBXM asset test starting...")
+print("Asset ID:", ${Number(assetId)})
+
+local success, container = pcall(function()
+    return InsertService:LoadAsset(${Number(assetId)})
+end)
+
+if not success then
+    warn("❌ InsertService:LoadAsset failed:")
+    warn(container)
+    return
+end
+
+print("✅ Asset loaded!")
+
+local model = Instance.new("Model")
+model.Name = "RiglifyAssetTest"
+
+for _, child in ipairs(container:GetChildren()) do
+    child.Parent = model
+end
+
+container:Destroy()
+
+print("📦 Serializing loaded asset...")
+
+local serializeSuccess, result = pcall(function()
+    return SerializationService:SerializeInstancesAsync({ model })
+end)
+
+if not serializeSuccess then
+    warn("❌ RBXM serialization failed:")
+    warn(result)
+    return
+end
+
+print("✅ RBXM serialization succeeded!")
+print("Buffer type:", typeof(result))
+print("Buffer length:", buffer.len(result))
+
+model:Destroy()
+
+print("🟢 Riglify RBXM asset test complete!")
+
+return {
+    BinaryOutput = result,
+    ReturnValues = { "RiglifyAssetTest" },
+}
+`;
+
+    const createResponse = await axios.post(
+        `https://apis.roblox.com/cloud/v2/universes/${RIGLIFY_UNIVERSE_ID}/places/${RIGLIFY_PLACE_ID}/luau-execution-session-tasks`,
+        {
+            script,
+            enableBinaryOutput: true,
+            timeout: "30s"
+        },
+        {
+            headers: {
+                "x-api-key": ROBLOX_API_KEY,
+                "Content-Type": "application/json"
+            },
+            timeout: 30000
+        }
+    );
+
+    let task = createResponse.data;
+
+    console.log("RBXM asset task created:", task.path);
+
+    while (
+        task.state === "QUEUED" ||
+        task.state === "PROCESSING"
+    ) {
+        await new Promise(resolve =>
+            setTimeout(resolve, 1500)
+        );
+
+        const taskResponse = await axios.get(
+            `https://apis.roblox.com/cloud/v2/${task.path}`,
+            {
+                headers: {
+                    "x-api-key": ROBLOX_API_KEY
+                },
+                timeout: 30000
+            }
+        );
+
+        task = taskResponse.data;
+    }
+
+    if (task.state !== "COMPLETE") {
+        throw new Error(
+            task.error?.message ||
+            `RBXM asset task failed with state ${task.state}`
+        );
+    }
+
+    if (!task.binaryOutputUri) {
+        throw new Error(
+            "Roblox completed the RBXM asset task but returned no binary output URI."
+        );
+    }
+
+    const binaryResponse = await axios.get(
+        task.binaryOutputUri,
+        {
+            responseType: "arraybuffer",
+            timeout: 30000
+        }
+    );
+
+    if (
+        !binaryResponse.data ||
+        binaryResponse.data.length === 0
+    ) {
+        throw new Error(
+            "Roblox returned an empty RBXM asset."
+        );
+    }
+
+    return Buffer.from(binaryResponse.data);
+}
+
+
+app.get("/test-rbxm-asset/:id", async (req, res) => {
+    const assetId = String(req.params.id || "").trim();
+
+    try {
+        if (!/^\d+$/.test(assetId)) {
+            return res.status(400).json({
+                success: false,
+                error: "Invalid Roblox asset ID."
+            });
+        }
+
+        console.log(
+            `Starting RBXM asset test for ${assetId}`
+        );
+
+        const rbxm =
+            await runRbxmAssetTest(assetId);
+
+        res.setHeader(
+            "Content-Type",
+            "model/x-rbxm"
+        );
+
+        res.setHeader(
+            "Content-Disposition",
+            `attachment; filename="Riglify_Asset_${assetId}.rbxm"`
+        );
+
+        res.setHeader(
+            "Content-Length",
+            rbxm.length
+        );
+
+        return res.send(rbxm);
+
+    } catch (err) {
+        console.error(
+            "RBXM ASSET TEST ERROR:",
+            err.response?.data ||
+            err.message
+        );
+
+        return res.status(500).json({
+            success: false,
+            error:
+                err.response?.data ||
+                err.message ||
+                "Unknown RBXM asset error"
+        });
+    }
+});
+
 
 
 app.get("/test-rbxm", async (req, res) => {
@@ -456,7 +638,7 @@ try {
 
     if (wornAssets.length > 0) {
 
-        assets = await Promise.all(
+        assets = (await Promise.all(
 
             wornAssets.map(async (assetId) => {
 
