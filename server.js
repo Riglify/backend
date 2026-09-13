@@ -1179,7 +1179,7 @@ if (
 
 }
                 
-                console.log("❌ Asset filtered:", {
+                console.log("✅ Asset accepted:", {
     id: assetId,
     name: realName,
     type: realType,
@@ -1282,7 +1282,7 @@ return {
 };
 
             })
-        ));
+        )).filter(Boolean);
 
     }
 
