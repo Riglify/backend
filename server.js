@@ -607,6 +607,8 @@ GET WORN ASSETS + REAL ASSET NAMES
 */
 
 let assets = [];
+        
+        
 
 try {
 
@@ -615,7 +617,7 @@ try {
     GET THE ASSET IDS THE USER IS WEARING
     --------------------------------------------------------
     */
-
+console.log("🟦 Getting currently-wearing assets for:", userId);
     const avatarResponse =
         await axios.get(
             `https://avatar.roblox.com/v1/users/${userId}/currently-wearing`
@@ -1323,6 +1325,12 @@ return res.json({
 
 } catch (err) {
 
+    const actualError =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        err.message ||
+        "Unknown error occurred.";
+
     console.error(
         "AVATAR FETCH ERROR:",
         err.response?.data ||
@@ -1330,15 +1338,9 @@ return res.json({
     );
 
     return res.status(500).json({
-
-        success:
-            false,
-
-        error:
-            "Failed to retrieve Roblox avatar."
-
+        success: false,
+        error: actualError
     });
-
 }
 
 });
