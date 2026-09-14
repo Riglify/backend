@@ -1968,6 +1968,11 @@ app.get('/download/:id', async (req, res) => {
 
                 const modelData =
                     modelResponse.data;
+                
+                console.log(
+    "🟧 FULL ROBLOX 3D MODEL DATA:",
+    JSON.stringify(modelData, null, 2)
+);
 
 
                 /*
