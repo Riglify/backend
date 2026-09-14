@@ -2100,9 +2100,10 @@ if (Array.isArray(modelData.textures)) {
             const textureName = `texture_${i + 1}.png`;
 
             textureFiles.push({
-                name: textureName,
-                buffer: textureBuffer
-            });
+    hash: textureHash,
+    name: textureName,
+    buffer: textureBuffer
+});
 
             console.log(
                 `✅ Texture downloaded: ${textureName} (${textureBuffer.length} bytes)`
@@ -2115,6 +2116,87 @@ if (Array.isArray(modelData.textures)) {
             );
         }
     }
+}
+                
+                
+                
+                
+                
+                /*
+----------------------------------------------------
+FIX MTL TEXTURE REFERENCES
+----------------------------------------------------
+*/
+
+if (mtlText && textureFiles.length) {
+
+    const textureMap = new Map(
+        textureFiles.map(texture => [
+            texture.hash,
+            `textures/${texture.name}`
+        ])
+    );
+
+    let fallbackTextureIndex = 0;
+
+    mtlText = mtlText
+        .split(/\r?\n/)
+        .map(line => {
+
+            const trimmed = line.trim();
+
+            // Only modify actual texture map lines
+            if (
+                !/^(map_Kd|map_Ka|map_Ks|map_d|map_bump|bump|norm|disp|decal)\s+/i.test(trimmed)
+            ) {
+                return line;
+            }
+
+            // First try to match the actual Roblox texture hash
+            for (const [hash, texturePath] of textureMap) {
+
+                if (line.includes(hash)) {
+
+                    return line.replace(
+                        hash,
+                        texturePath
+                    );
+
+                }
+
+            }
+
+            // Fallback:
+            // If Roblox's MTL doesn't contain the hash,
+            // replace the referenced texture with our renamed file.
+            if (fallbackTextureIndex < textureFiles.length) {
+
+                const match = line.match(
+                    /^(\s*(?:map_Kd|map_Ka|map_Ks|map_d|map_bump|bump|norm|disp|decal)\s+)(.+?)\s*$/i
+                );
+
+                if (match) {
+
+                    const texturePath =
+                        `textures/${textureFiles[fallbackTextureIndex].name}`;
+
+                    fallbackTextureIndex++;
+
+                    return (
+                        match[1] +
+                        texturePath
+                    );
+
+                }
+
+            }
+
+            return line;
+
+        })
+        .join("\n");
+
+    console.log("🟧 MTL texture references rewritten.");
 }
 
 
