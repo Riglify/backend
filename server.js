@@ -323,6 +323,64 @@ app.get("/test-rbxm-asset/:id", async (req, res) => {
 
 
 
+app.get("/test-rbxm-avatar/:userId", async (req, res) => {
+
+    const userId =
+        String(req.params.userId || "").trim();
+
+    try {
+
+        if (!/^\d+$/.test(userId)) {
+            return res.status(400).json({
+                success: false,
+                error: "Invalid Roblox user ID."
+            });
+        }
+
+        console.log(
+            `🟥 Starting FULL AVATAR RBXM test for ${userId}`
+        );
+
+        const rbxm =
+            await runRbxmAvatarTest(userId);
+
+        res.setHeader(
+            "Content-Type",
+            "model/x-rbxm"
+        );
+
+        res.setHeader(
+            "Content-Disposition",
+            `attachment; filename="Riglify_Avatar_${userId}.rbxm"`
+        );
+
+        res.setHeader(
+            "Content-Length",
+            rbxm.length
+        );
+
+        return res.send(rbxm);
+
+    } catch (err) {
+
+        console.error(
+            "FULL AVATAR RBXM TEST ERROR:",
+            err.response?.data ||
+            err.message
+        );
+
+        return res.status(500).json({
+            success: false,
+            error:
+                err.response?.data ||
+                err.message ||
+                "Unknown full-avatar RBXM error"
+        });
+    }
+});
+
+
+
 app.get("/test-rbxm", async (req, res) => {
     try {
         const rbxm = await runRbxmTest();
@@ -352,7 +410,167 @@ app.get("/test-rbxm", async (req, res) => {
 });
 
 
+async function runRbxmAvatarTest(userId) {
+    const script = `
+local InsertService = game:GetService("InsertService")
+local SerializationService = game:GetService("SerializationService")
 
+print("🟥 Riglify FULL AVATAR RBXM TEST")
+print("User ID:", ${Number(userId)})
+
+-- Get the user's currently worn asset IDs
+local HttpService = game:GetService("HttpService")
+
+local success, response = pcall(function()
+    return HttpService:GetAsync(
+        "https://avatar.roblox.com/v1/users/${Number(userId)}/currently-wearing"
+    )
+end)
+
+if not success then
+    warn("❌ Failed to get currently-wearing assets:")
+    warn(response)
+    return
+end
+
+local avatarData = HttpService:JSONDecode(response)
+
+local assetIds = avatarData.assetIds or {}
+
+print("👤 Worn asset count:", #assetIds)
+
+local avatarModel = Instance.new("Model")
+avatarModel.Name = "RiglifyAvatar"
+
+for _, assetId in ipairs(assetIds) do
+
+    local loadSuccess, container = pcall(function()
+        return InsertService:LoadAsset(assetId)
+    end)
+
+    if loadSuccess and container then
+
+        for _, child in ipairs(container:GetChildren()) do
+            child.Parent = avatarModel
+        end
+
+        container:Destroy()
+
+        print("✅ Loaded asset:", assetId)
+
+    else
+
+        warn("⚠️ Could not load asset:", assetId)
+        warn(container)
+
+    end
+end
+
+print("📦 Serializing full avatar...")
+
+local serializeSuccess, result = pcall(function()
+    return SerializationService:SerializeInstancesAsync({
+        avatarModel
+    })
+end)
+
+if not serializeSuccess then
+    warn("❌ Full avatar serialization failed:")
+    warn(result)
+    return
+end
+
+print("✅ FULL AVATAR SERIALIZED!")
+print("Buffer type:", typeof(result))
+print("Buffer length:", buffer.len(result))
+
+avatarModel:Destroy()
+
+return {
+    BinaryOutput = result,
+    ReturnValues = {
+        "RiglifyFullAvatar"
+    },
+}
+`;
+
+    const createResponse = await axios.post(
+        `https://apis.roblox.com/cloud/v2/universes/${RIGLIFY_UNIVERSE_ID}/places/${RIGLIFY_PLACE_ID}/luau-execution-session-tasks`,
+        {
+            script,
+            enableBinaryOutput: true,
+            timeout: "60s"
+        },
+        {
+            headers: {
+                "x-api-key": ROBLOX_API_KEY,
+                "Content-Type": "application/json"
+            },
+            timeout: 60000
+        }
+    );
+
+    let task = createResponse.data;
+
+    console.log(
+        "Full avatar RBXM task created:",
+        task.path
+    );
+
+    while (
+        task.state === "QUEUED" ||
+        task.state === "PROCESSING"
+    ) {
+
+        await new Promise(resolve =>
+            setTimeout(resolve, 1500)
+        );
+
+        const taskResponse = await axios.get(
+            `https://apis.roblox.com/cloud/v2/${task.path}`,
+            {
+                headers: {
+                    "x-api-key": ROBLOX_API_KEY
+                },
+                timeout: 60000
+            }
+        );
+
+        task = taskResponse.data;
+    }
+
+    if (task.state !== "COMPLETE") {
+        throw new Error(
+            task.error?.message ||
+            `Full avatar RBXM task failed with state ${task.state}`
+        );
+    }
+
+    if (!task.binaryOutputUri) {
+        throw new Error(
+            "Roblox completed the full avatar task but returned no binary output URI."
+        );
+    }
+
+    const binaryResponse = await axios.get(
+        task.binaryOutputUri,
+        {
+            responseType: "arraybuffer",
+            timeout: 60000
+        }
+    );
+
+    if (
+        !binaryResponse.data ||
+        binaryResponse.data.length === 0
+    ) {
+        throw new Error(
+            "Roblox returned an empty full-avatar RBXM."
+        );
+    }
+
+    return Buffer.from(binaryResponse.data);
+}
 
 
 const DOWNLOADABLE_AVATAR_ASSET_TYPES = new Set([
