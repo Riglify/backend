@@ -2050,153 +2050,585 @@ app.get('/download/:id', async (req, res) => {
 let mtlText = null;
 const textureFiles = [];
 
+/*
+----------------------------------------------------
+DOWNLOAD MTL
+----------------------------------------------------
+*/
+
 if (modelData.mtl) {
-    const mtlUrl = robloxCdnUrl(modelData.mtl);
 
-    console.log("🟧 Downloading MTL:", mtlUrl);
+    const mtlUrl =
+        robloxCdnUrl(modelData.mtl);
 
-    const mtlResponse = await axios.get(mtlUrl, {
-        responseType: "text",
-        timeout: 30000,
-        headers: {
-            "User-Agent": "Riglify/1.0"
-        }
-    });
+    console.log(
+        "🟧 Downloading MTL:",
+        mtlUrl
+    );
 
-    mtlText = mtlResponse.data;
+    const mtlResponse =
+        await axios.get(
+            mtlUrl,
+            {
+                responseType: "text",
+                timeout: 30000,
 
-    console.log("🟧 MTL downloaded:", mtlText.length, "bytes");
+                headers: {
+                    "User-Agent":
+                        "Riglify/1.0"
+                }
+            }
+        );
+
+    mtlText =
+        mtlResponse.data;
+
+    console.log(
+        "🟧 MTL downloaded:",
+        mtlText.length,
+        "bytes"
+    );
 }
 
-if (Array.isArray(modelData.textures)) {
+
+/*
+----------------------------------------------------
+DOWNLOAD TEXTURES
+----------------------------------------------------
+*/
+
+if (
+    Array.isArray(
+        modelData.textures
+    )
+) {
+
     console.log(
         "🟧 Roblox textures:",
         modelData.textures
     );
 
-    for (let i = 0; i < modelData.textures.length; i++) {
-        const textureHash = modelData.textures[i];
+    for (
+        let i = 0;
+        i < modelData.textures.length;
+        i++
+    ) {
+
+        const textureHash =
+            modelData.textures[i];
 
         try {
-            const textureUrl = robloxCdnUrl(textureHash);
+
+            const textureUrl =
+                robloxCdnUrl(
+                    textureHash
+                );
 
             console.log(
                 `🟧 Downloading texture ${i + 1}/${modelData.textures.length}:`,
                 textureUrl
             );
 
-            const textureResponse = await axios.get(textureUrl, {
-                responseType: "arraybuffer",
-                timeout: 30000,
-                headers: {
-                    "User-Agent": "Riglify/1.0"
-                }
-            });
+            const textureResponse =
+                await axios.get(
+                    textureUrl,
+                    {
+                        responseType:
+                            "arraybuffer",
 
-            const textureBuffer = Buffer.from(
-                textureResponse.data
-            );
+                        timeout:
+                            30000,
 
-            const textureName = `texture_${i + 1}.png`;
+                        headers: {
+                            "User-Agent":
+                                "Riglify/1.0"
+                        }
+                    }
+                );
+
+            const textureBuffer =
+                Buffer.from(
+                    textureResponse.data
+                );
+
+            const textureName =
+                `texture_${i + 1}.png`;
 
             textureFiles.push({
-    hash: textureHash,
-    name: textureName,
-    buffer: textureBuffer
-});
+
+                index:
+                    i + 1,
+
+                hash:
+                    textureHash,
+
+                name:
+                    textureName,
+
+                buffer:
+                    textureBuffer
+
+            });
 
             console.log(
                 `✅ Texture downloaded: ${textureName} (${textureBuffer.length} bytes)`
             );
 
         } catch (textureError) {
+
             console.warn(
                 `⚠️ Failed to download texture ${textureHash}:`,
                 textureError.message
             );
+
         }
+
     }
+
 }
-                
-                
-                
-                
-                
-                /*
+
+
+/*
 ----------------------------------------------------
-FIX MTL TEXTURE REFERENCES
+NORMALIZE OBJ MATERIAL NAMES
+----------------------------------------------------
+
+Roblox can generate names such as:
+
+Player1Mtl
+Handle2Mtl
+Handle3Mtl
+Handle11Mtl
+Handle12Mtl
+
+Riglify converts them to:
+
+Texture1
+Texture2
+Texture3
+Texture11
+Texture12
 ----------------------------------------------------
 */
 
-if (mtlText && textureFiles.length) {
+const materialMap =
+    new Map();
 
-    const textureMap = new Map(
-        textureFiles.map(texture => [
-            texture.hash,
-            `textures/${texture.name}`
-        ])
-    );
+let fallbackMaterialIndex =
+    0;
 
-    let fallbackTextureIndex = 0;
 
-    mtlText = mtlText
-        .split(/\r?\n/)
-        .map(line => {
+/*
+----------------------------------------------------
+FIND MATERIAL NAMES FROM OBJ
+----------------------------------------------------
+*/
 
-            const trimmed = line.trim();
+let objText =
+    objResponse.data;
 
-            // Only modify actual texture map lines
-            if (
-                !/^(map_Kd|map_Ka|map_Ks|map_d|map_bump|bump|norm|disp|decal)\s+/i.test(trimmed)
-            ) {
-                return line;
-            }
 
-            // First try to match the actual Roblox texture hash
-            for (const [hash, texturePath] of textureMap) {
+/*
+----------------------------------------------------
+SCAN OBJ FOR usemtl REFERENCES
+----------------------------------------------------
+*/
 
-                if (line.includes(hash)) {
+const objMaterialMatches =
+    objText.match(
+        /^usemtl\s+(.+)$/gm
+    ) || [];
 
-                    return line.replace(
-                        hash,
-                        texturePath
+
+for (
+    const materialLine
+    of objMaterialMatches
+) {
+
+    const originalMaterial =
+        materialLine
+            .replace(
+                /^usemtl\s+/,
+                ""
+            )
+            .trim();
+
+    if (
+        materialMap.has(
+            originalMaterial
+        )
+    ) {
+        continue;
+    }
+
+
+    /*
+    ------------------------------------------------
+    PLAYER / HANDLE NUMBER
+    ------------------------------------------------
+    */
+
+    const numberedMatch =
+        originalMaterial.match(
+            /^(?:Player|Handle)(\d+)Mtl$/i
+        );
+
+
+    if (
+        numberedMatch
+    ) {
+
+        const textureNumber =
+            Number(
+                numberedMatch[1]
+            );
+
+        if (
+            textureNumber >= 1 &&
+            textureNumber <=
+                textureFiles.length
+        ) {
+
+            materialMap.set(
+                originalMaterial,
+                `Texture${textureNumber}`
+            );
+
+            continue;
+        }
+
+    }
+
+
+    /*
+    ------------------------------------------------
+    FALLBACK SEQUENTIAL MATERIAL
+    ------------------------------------------------
+    */
+
+    fallbackMaterialIndex++;
+
+    if (
+        fallbackMaterialIndex <=
+        textureFiles.length
+    ) {
+
+        materialMap.set(
+            originalMaterial,
+            `Texture${fallbackMaterialIndex}`
+        );
+
+    }
+
+}
+
+
+/*
+----------------------------------------------------
+REWRITE OBJ usemtl REFERENCES
+----------------------------------------------------
+*/
+
+if (
+    materialMap.size > 0
+) {
+
+    objText =
+        objText
+            .split(/\r?\n/)
+            .map(line => {
+
+                const match =
+                    line.match(
+                        /^(\s*usemtl\s+)(.+?)\s*$/
                     );
 
+                if (!match) {
+                    return line;
                 }
 
-            }
+                const originalMaterial =
+                    match[2].trim();
 
-            // Fallback:
-            // If Roblox's MTL doesn't contain the hash,
-            // replace the referenced texture with our renamed file.
-            if (fallbackTextureIndex < textureFiles.length) {
+                const newMaterial =
+                    materialMap.get(
+                        originalMaterial
+                    );
 
-                const match = line.match(
-                    /^(\s*(?:map_Kd|map_Ka|map_Ks|map_d|map_bump|bump|norm|disp|decal)\s+)(.+?)\s*$/i
+                if (!newMaterial) {
+                    return line;
+                }
+
+                return (
+                    match[1] +
+                    newMaterial
                 );
 
-                if (match) {
+            })
+            .join("\n");
 
-                    const texturePath =
-                        `textures/${textureFiles[fallbackTextureIndex].name}`;
+}
+
+
+/*
+----------------------------------------------------
+REWRITE MTL
+----------------------------------------------------
+*/
+
+if (
+    mtlText &&
+    textureFiles.length > 0
+) {
+
+    let currentMaterial =
+        null;
+
+    let fallbackTextureIndex =
+        0;
+
+
+    mtlText =
+        mtlText
+            .split(/\r?\n/)
+            .map(line => {
+
+                const trimmed =
+                    line.trim();
+
+
+                /*
+                ----------------------------------------
+                MATERIAL NAME
+                ----------------------------------------
+                */
+
+                const materialMatch =
+                    trimmed.match(
+                        /^newmtl\s+(.+)$/i
+                    );
+
+                if (
+                    materialMatch
+                ) {
+
+                    const originalMaterial =
+                        materialMatch[1]
+                            .trim();
+
+                    currentMaterial =
+                        originalMaterial;
+
+
+                    const renamedMaterial =
+                        materialMap.get(
+                            originalMaterial
+                        );
+
+
+                    if (
+                        renamedMaterial
+                    ) {
+
+                        return (
+                            `newmtl ${renamedMaterial}`
+                        );
+
+                    }
+
+
+                    /*
+                    ------------------------------------
+                    FALLBACK MATERIAL
+                    ------------------------------------
+                    */
 
                     fallbackTextureIndex++;
 
-                    return (
-                        match[1] +
-                        texturePath
-                    );
+                    if (
+                        fallbackTextureIndex <=
+                        textureFiles.length
+                    ) {
+
+                        const fallbackName =
+                            `Texture${fallbackTextureIndex}`;
+
+                        materialMap.set(
+                            originalMaterial,
+                            fallbackName
+                        );
+
+                        return (
+                            `newmtl ${fallbackName}`
+                        );
+
+                    }
+
+                    return line;
 
                 }
 
-            }
 
-            return line;
+                /*
+                ----------------------------------------
+                TEXTURE MAP
+                ----------------------------------------
+                */
 
-        })
-        .join("\n");
+                const textureMapMatch =
+                    trimmed.match(
+                        /^(map_Kd|map_Ka|map_Ks|map_d|map_bump|bump|norm|disp|decal)\s+(.+)$/i
+                    );
 
-    console.log("🟧 MTL texture references rewritten.");
+                if (
+                    textureMapMatch
+                ) {
+
+                    const directive =
+                        textureMapMatch[1];
+
+
+                    /*
+                    ------------------------------------
+                    TRY TO FIND THE TEXTURE BY HASH
+                    ------------------------------------
+                    */
+
+                    let matchedTexture =
+                        null;
+
+                    for (
+                        const texture
+                        of textureFiles
+                    ) {
+
+                        if (
+                            line.includes(
+                                texture.hash
+                            )
+                        ) {
+
+                            matchedTexture =
+                                texture;
+
+                            break;
+
+                        }
+
+                    }
+
+
+                    /*
+                    ------------------------------------
+                    USE MATERIAL NUMBER IF AVAILABLE
+                    ------------------------------------
+                    */
+
+                    if (
+                        !matchedTexture &&
+                        currentMaterial
+                    ) {
+
+                        const materialMatch =
+                            currentMaterial.match(
+                                /^(?:Player|Handle)(\d+)Mtl$/i
+                            );
+
+                        if (
+                            materialMatch
+                        ) {
+
+                            const textureNumber =
+                                Number(
+                                    materialMatch[1]
+                                );
+
+                            matchedTexture =
+                                textureFiles.find(
+                                    texture =>
+                                        texture.index ===
+                                        textureNumber
+                                );
+
+                            if (
+                                matchedTexture
+                            ) {
+
+                                materialMap.set(
+                                    currentMaterial,
+                                    `Texture${textureNumber}`
+                                );
+
+                            }
+
+                        }
+
+                    }
+
+
+                    /*
+                    ------------------------------------
+                    FINAL FALLBACK
+                    ------------------------------------
+                    */
+
+                    if (
+                        !matchedTexture
+                    ) {
+
+                        const materialName =
+                            materialMap.get(
+                                currentMaterial
+                            );
+
+                        if (
+                            materialName
+                        ) {
+
+                            const textureNumber =
+                                Number(
+                                    materialName.replace(
+                                        "Texture",
+                                        ""
+                                    )
+                                );
+
+                            matchedTexture =
+                                textureFiles.find(
+                                    texture =>
+                                        texture.index ===
+                                        textureNumber
+                                );
+
+                        }
+
+                    }
+
+
+                    if (
+                        matchedTexture
+                    ) {
+
+                        return (
+                            `${directive} textures/${matchedTexture.name}`
+                        );
+
+                    }
+
+                }
+
+
+                return line;
+
+            })
+            .join("\n");
+
+
+    console.log(
+        "🟧 MTL material names rewritten:",
+        [...materialMap.entries()]
+    );
+
 }
 
 
@@ -2262,7 +2694,7 @@ if (mtlText && textureFiles.length) {
                 archive.pipe(res);
 
 
-archive.append(objResponse.data, {
+archive.append(objText, {
     name: `${username}.obj`
 });
 
