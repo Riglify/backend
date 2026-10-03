@@ -6,6 +6,11 @@ const cors = require("cors");
 const archiver = require("archiver");
 require("dotenv").config();
 
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
+const obj2gltf = require("obj2gltf");
+
 const app = express();
 
 app.use(cors());
@@ -534,7 +539,7 @@ async function runRbxmAvatarTest(userId) {
 local InsertService = game:GetService("InsertService")
 local SerializationService = game:GetService("SerializationService")
 
-print("🟥 Riglify FULL AVATAR RBXM TEST")
+print("m Riglify FULL AVATAR RBXM TEST")
 print("User ID:", ${Number(userId)})
 
 -- Get the user's currently worn asset IDs
@@ -2740,7 +2745,7 @@ return;
 local Players = game:GetService("Players")
 local SerializationService = game:GetService("SerializationService")
 
-print("🟥 Riglify FULL AVATAR RBXM EXPORT")
+print("m Riglify FULL AVATAR RBXM EXPORT")
 print("User ID:", ${Number(targetUserId)})
 
 local success, avatarModel = pcall(function()
@@ -3162,5 +3167,5 @@ app.get("/auth/github/callback", async(req,res)=>{
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
-    console.log("Server running");
+    console.log(`Server running on port ${PORT}`);
 });
